@@ -1,0 +1,39 @@
+# Unreal Engine Generated Files
+Binaries/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# IDE Files
+.vscode/
+.vs/
+
+# Visual Studio
+*.VC.db
+*.opensdf
+*.opendb
+*.sdf
+*.sln
+*.suo
+*.user
+*.aps
+*.pch
+*.vspscc
+*_i.c
+*_p.c
+*.ncb
+*.tlb
+*.tlh
+*.tmp
+*.tmp_proj
+*.log
+*.svclog
+*.scc
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+
+# OS Files
+.DS_Store
+Thumbs.db
