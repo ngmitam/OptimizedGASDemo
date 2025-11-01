@@ -18,7 +18,9 @@ public class OptimizedGASDemo : ModuleRules
 			"StateTreeModule",
 			"GameplayStateTreeModule",
 			"UMG",
-			"Slate"
+			"Slate",
+			"ModularGameplay",
+			"GameplayAbilities"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
@@ -31,6 +33,7 @@ public class OptimizedGASDemo : ModuleRules
 			"OptimizedGASDemo/Variant_Combat/AI",
 			"OptimizedGASDemo/Variant_Combat/Animation",
 			"OptimizedGASDemo/Variant_Combat/Gameplay",
+			"OptimizedGASDemo/Variant_Combat/Health",
 			"OptimizedGASDemo/Variant_Combat/Interfaces",
 			"OptimizedGASDemo/Variant_Combat/UI",
 			"OptimizedGASDemo/Variant_SideScrolling",

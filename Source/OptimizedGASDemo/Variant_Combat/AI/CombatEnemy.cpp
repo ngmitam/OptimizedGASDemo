@@ -33,6 +33,10 @@ ACombatEnemy::ACombatEnemy() {
   LifeBar = CreateDefaultSubobject<UWidgetComponent>(TEXT("LifeBar"));
   LifeBar->SetupAttachment(RootComponent);
 
+  // create the health component
+  HealthComponent =
+      CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
+
   // create the ability system component
   AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(
       TEXT("AbilitySystemComponent"));
@@ -295,42 +299,35 @@ float ACombatEnemy::TakeDamage(float Damage,
                                struct FDamageEvent const &DamageEvent,
                                AController *EventInstigator,
                                AActor *DamageCauser) {
-  // only process damage if the character is still alive
-  if (CurrentHP <= 0.0f) {
-    return 0.0f;
+  if (HealthComponent && !HealthComponent->IsDead()) {
+    float CurrentHealth = HealthComponent->GetHealth();
+    float NewHealth = FMath::Max(0.0f, CurrentHealth - Damage);
+
+    // Set health via GAS
+    if (AbilitySystemComponent) {
+      AbilitySystemComponent->SetNumericAttributeBase(
+          UCombatAttributeSet::GetHealthAttribute(), NewHealth);
+    }
+
+    if (NewHealth <= 0.0f) {
+      HandleDeath();
+    } else {
+      // enable partial ragdoll physics, but keep the pelvis vertical
+      GetMesh()->SetPhysicsBlendWeight(0.5f);
+      GetMesh()->SetBodySimulatePhysics(PelvisBoneName, false);
+    }
+
+    return Damage;
   }
 
-  // reduce the current HP
-  CurrentHP -= Damage;
-
-  // sync with GAS
-  if (AbilitySystemComponent) {
-    AbilitySystemComponent->SetNumericAttributeBase(
-        UCombatAttributeSet::GetHealthAttribute(), CurrentHP);
-  }
-
-  // have we run out of HP?
-  if (CurrentHP <= 0.0f) {
-    // die
-    HandleDeath();
-  } else {
-    // update the life bar
-    LifeBarWidget->SetLifePercentage(CurrentHP / MaxHP);
-
-    // enable partial ragdoll physics, but keep the pelvis vertical
-    GetMesh()->SetPhysicsBlendWeight(0.5f);
-    GetMesh()->SetBodySimulatePhysics(PelvisBoneName, false);
-  }
-
-  // return the received damage amount
-  return Damage;
+  return 0.0f;
 }
 
 void ACombatEnemy::Landed(const FHitResult &Hit) {
   Super::Landed(Hit);
 
   // is the character still alive?
-  if (CurrentHP >= 0.0f) {
+  if (HealthComponent && !HealthComponent->IsDead()) {
     // disable ragdoll physics
     GetMesh()->SetPhysicsBlendWeight(0.0f);
   }
@@ -361,15 +358,14 @@ void ACombatEnemy::BeginPlay() {
     AbilitySystemComponent->SetNumericAttributeBase(
         UCombatAttributeSet::GetLaunchImpulseAttribute(), MeleeLaunchImpulse);
 
-    // Bind delegates to sync HP variables with GAS
-    AbilitySystemComponent
-        ->GetGameplayAttributeValueChangeDelegate(
-            UCombatAttributeSet::GetHealthAttribute())
-        .AddUObject(this, &ACombatEnemy::OnHealthChanged);
-    AbilitySystemComponent
-        ->GetGameplayAttributeValueChangeDelegate(
-            UCombatAttributeSet::GetMaxHealthAttribute())
-        .AddUObject(this, &ACombatEnemy::OnMaxHealthChanged);
+    // Initialize health component
+    HealthComponent->InitializeWithAbilitySystem(AbilitySystemComponent);
+
+    // Bind to health component delegates to sync CurrentHP
+    HealthComponent->OnHealthChanged.AddUObject(
+        this, &ACombatEnemy::OnHealthComponentChanged);
+    HealthComponent->OnMaxHealthChanged.AddUObject(
+        this, &ACombatEnemy::OnMaxHealthComponentChanged);
   }
 
   // get the life bar widget from the widget comp
@@ -387,19 +383,16 @@ void ACombatEnemy::EndPlay(EEndPlayReason::Type EndPlayReason) {
   GetWorld()->GetTimerManager().ClearTimer(DeathTimer);
 }
 
-void ACombatEnemy::OnHealthChanged(const FOnAttributeChangeData &Data) {
-  CurrentHP = Data.NewValue;
+void ACombatEnemy::OnHealthComponentChanged(float NewHealth) {
+  CurrentHP = NewHealth;
   if (LifeBarWidget) {
-    float MaxHealth = AbilitySystemComponent
-                          ? AbilitySystemComponent->GetNumericAttribute(
-                                UCombatAttributeSet::GetMaxHealthAttribute())
-                          : MaxHP;
+    float MaxHealth = HealthComponent->GetMaxHealth();
     LifeBarWidget->SetLifePercentage(CurrentHP / MaxHealth);
   }
 }
 
-void ACombatEnemy::OnMaxHealthChanged(const FOnAttributeChangeData &Data) {
-  MaxHP = Data.NewValue;
+void ACombatEnemy::OnMaxHealthComponentChanged(float NewMaxHealth) {
+  MaxHP = NewMaxHealth;
   if (LifeBarWidget) {
     LifeBarWidget->SetLifePercentage(CurrentHP / MaxHP);
   }

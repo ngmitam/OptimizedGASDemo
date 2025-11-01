@@ -11,6 +11,7 @@
 #include "Animation/AnimMontage.h"
 #include "Engine/TimerHandle.h"
 #include "CombatAttributeSet.h"
+#include "HealthComponent.h"
 #include "CombatEnemy.generated.h"
 
 class UWidgetComponent;
@@ -41,6 +42,11 @@ class ACombatEnemy : public ACharacter,
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
             meta = (AllowPrivateAccess = "true"))
   UWidgetComponent *LifeBar;
+
+  /** Health component for managing health */
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
+            meta = (AllowPrivateAccess = "true"))
+  UHealthComponent *HealthComponent;
 
 protected:
   /** The ability system component for this enemy */
@@ -263,9 +269,9 @@ protected:
   /** EndPlay cleanup */
   virtual void EndPlay(EEndPlayReason::Type EndPlayReason) override;
 
-  /** Called when Health attribute changes */
-  void OnHealthChanged(const FOnAttributeChangeData &Data);
+  /** Called when HealthComponent health changes */
+  void OnHealthComponentChanged(float NewHealth);
 
-  /** Called when MaxHealth attribute changes */
-  void OnMaxHealthChanged(const FOnAttributeChangeData &Data);
+  /** Called when HealthComponent max health changes */
+  void OnMaxHealthComponentChanged(float NewMaxHealth);
 };

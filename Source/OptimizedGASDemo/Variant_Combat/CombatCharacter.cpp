@@ -48,6 +48,10 @@ ACombatCharacter::ACombatCharacter() {
   LifeBar = CreateDefaultSubobject<UWidgetComponent>(TEXT("LifeBar"));
   LifeBar->SetupAttachment(RootComponent);
 
+  // create the health component
+  HealthComponent =
+      CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
+
   // set the player tag
   Tags.Add(FName("Player"));
 }
@@ -166,8 +170,7 @@ void ACombatCharacter::DoChargedAttackEnd() {
 
 void ACombatCharacter::ResetHP() {
   if (UAbilitySystemComponent *ASC = GetAbilitySystemComponent()) {
-    float MaxHealth =
-        ASC->GetNumericAttribute(UCombatAttributeSet::GetMaxHealthAttribute());
+    float MaxHealth = HealthComponent->GetMaxHealth();
     ASC->SetNumericAttributeBase(UCombatAttributeSet::GetHealthAttribute(),
                                  MaxHealth);
   }
@@ -444,24 +447,19 @@ float ACombatCharacter::TakeDamage(float Damage,
                                    struct FDamageEvent const &DamageEvent,
                                    AController *EventInstigator,
                                    AActor *DamageCauser) {
-  if (UAbilitySystemComponent *ASC = GetAbilitySystemComponent()) {
-    float CurrentHealth =
-        ASC->GetNumericAttribute(UCombatAttributeSet::GetHealthAttribute());
-    if (CurrentHealth <= 0.0f) {
-      return 0.0f;
-    }
-
+  if (HealthComponent && !HealthComponent->IsDead()) {
+    float CurrentHealth = HealthComponent->GetHealth();
     float NewHealth = FMath::Max(0.0f, CurrentHealth - Damage);
-    ASC->SetNumericAttributeBase(UCombatAttributeSet::GetHealthAttribute(),
-                                 NewHealth);
+
+    // Set health via GAS
+    if (UAbilitySystemComponent *ASC = GetAbilitySystemComponent()) {
+      ASC->SetNumericAttributeBase(UCombatAttributeSet::GetHealthAttribute(),
+                                   NewHealth);
+    }
 
     if (NewHealth <= 0.0f) {
       HandleDeath();
     } else {
-      float MaxHealth = ASC->GetNumericAttribute(
-          UCombatAttributeSet::GetMaxHealthAttribute());
-      LifeBarWidget->SetLifePercentage(NewHealth / MaxHealth);
-
       // enable partial ragdoll physics, but keep the pelvis vertical
       GetMesh()->SetPhysicsBlendWeight(0.5f);
       GetMesh()->SetBodySimulatePhysics(PelvisBoneName, false);
@@ -477,13 +475,9 @@ void ACombatCharacter::Landed(const FHitResult &Hit) {
   Super::Landed(Hit);
 
   // is the character still alive?
-  if (UAbilitySystemComponent *ASC = GetAbilitySystemComponent()) {
-    float CurrentHealth =
-        ASC->GetNumericAttribute(UCombatAttributeSet::GetHealthAttribute());
-    if (CurrentHealth > 0.0f) {
-      // disable ragdoll physics
-      GetMesh()->SetPhysicsBlendWeight(0.0f);
-    }
+  if (HealthComponent && !HealthComponent->IsDead()) {
+    // disable ragdoll physics
+    GetMesh()->SetPhysicsBlendWeight(0.0f);
   }
 }
 
@@ -506,15 +500,16 @@ void ACombatCharacter::BeginPlay() {
   // reset HP to maximum
   ResetHP();
 
-  // Bind delegates to sync HP with GAS
+  // Initialize health component
   if (UAbilitySystemComponent *ASC = GetAbilitySystemComponent()) {
-    ASC->GetGameplayAttributeValueChangeDelegate(
-           UCombatAttributeSet::GetHealthAttribute())
-        .AddUObject(this, &ACombatCharacter::OnHealthChanged);
-    ASC->GetGameplayAttributeValueChangeDelegate(
-           UCombatAttributeSet::GetMaxHealthAttribute())
-        .AddUObject(this, &ACombatCharacter::OnMaxHealthChanged);
+    HealthComponent->InitializeWithAbilitySystem(ASC);
   }
+
+  // Bind to health component delegates for UI updates
+  HealthComponent->OnHealthChanged.AddUObject(
+      this, &ACombatCharacter::OnHealthComponentChanged);
+  HealthComponent->OnMaxHealthChanged.AddUObject(
+      this, &ACombatCharacter::OnMaxHealthComponentChanged);
 }
 
 void ACombatCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason) {
@@ -572,23 +567,16 @@ void ACombatCharacter::NotifyControllerChanged() {
   }
 }
 
-void ACombatCharacter::OnHealthChanged(const FOnAttributeChangeData &Data) {
+void ACombatCharacter::OnHealthComponentChanged(float NewHealth) {
   if (LifeBarWidget) {
-    float MaxHealth = GetAbilitySystemComponent()
-                          ? GetAbilitySystemComponent()->GetNumericAttribute(
-                                UCombatAttributeSet::GetMaxHealthAttribute())
-                          : 100.0f; // fallback
-    LifeBarWidget->SetLifePercentage(Data.NewValue / MaxHealth);
+    float MaxHealth = HealthComponent->GetMaxHealth();
+    LifeBarWidget->SetLifePercentage(NewHealth / MaxHealth);
   }
 }
 
-void ACombatCharacter::OnMaxHealthChanged(const FOnAttributeChangeData &Data) {
+void ACombatCharacter::OnMaxHealthComponentChanged(float NewMaxHealth) {
   if (LifeBarWidget) {
-    float CurrentHealth =
-        GetAbilitySystemComponent()
-            ? GetAbilitySystemComponent()->GetNumericAttribute(
-                  UCombatAttributeSet::GetHealthAttribute())
-            : 100.0f; // fallback
-    LifeBarWidget->SetLifePercentage(CurrentHealth / Data.NewValue);
+    float CurrentHealth = HealthComponent->GetHealth();
+    LifeBarWidget->SetLifePercentage(CurrentHealth / NewMaxHealth);
   }
 }

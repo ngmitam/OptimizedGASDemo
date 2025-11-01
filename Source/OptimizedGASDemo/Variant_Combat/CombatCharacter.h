@@ -9,6 +9,7 @@
 #include "CombatAttacker.h"
 #include "CombatDamageable.h"
 #include "Animation/AnimInstance.h"
+#include "HealthComponent.h"
 #include "CombatCharacter.generated.h"
 
 class USpringArmComponent;
@@ -49,6 +50,11 @@ class ACombatCharacter : public ACharacter,
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
             meta = (AllowPrivateAccess = "true"))
   UWidgetComponent *LifeBar;
+
+  /** Health component for managing health */
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
+            meta = (AllowPrivateAccess = "true"))
+  UHealthComponent *HealthComponent;
 
 protected:
   /** Jump Input Action */
@@ -351,9 +357,9 @@ public:
     return FollowCamera;
   }
 
-  /** Called when Health attribute changes */
-  void OnHealthChanged(const FOnAttributeChangeData &Data);
+  /** Called when HealthComponent health changes */
+  void OnHealthComponentChanged(float NewHealth);
 
-  /** Called when MaxHealth attribute changes */
-  void OnMaxHealthChanged(const FOnAttributeChangeData &Data);
+  /** Called when HealthComponent max health changes */
+  void OnMaxHealthComponentChanged(float NewMaxHealth);
 };
