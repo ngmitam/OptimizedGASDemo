@@ -11,7 +11,9 @@
 #include "Animation/AnimMontage.h"
 #include "Engine/TimerHandle.h"
 #include "CombatAttributeSet.h"
+#include "CombatPawnData.h"
 #include "HealthComponent.h"
+#include "../Gameplay/DamageEventData.h"
 #include "CombatEnemy.generated.h"
 
 class UWidgetComponent;
@@ -59,6 +61,10 @@ protected:
             meta = (AllowPrivateAccess = "true"))
   UCombatAttributeSet *AttributeSet;
 
+  /** Pawn data for attributes and abilities */
+  UPROPERTY(EditDefaultsOnly, Category = "GAS")
+  UCombatPawnData *PawnData;
+
 public:
   /** Constructor */
   ACombatEnemy();
@@ -70,13 +76,13 @@ public:
 protected:
   /** Max amount of HP the character will have on respawn */
   UPROPERTY(EditAnywhere, Category = "Damage")
-  float MaxHP = 3.0f;
+  float MaxHP = 10.0f;
 
 public:
   /** Current amount of HP the character has */
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Damage",
             meta = (ClampMin = 0))
-  float CurrentHP = 0.0f;
+  float CurrentHP = 3.0f;
 
 protected:
   /** Name of the pelvis bone, for damage ragdoll physics */
@@ -190,6 +196,15 @@ public:
   UPROPERTY(BlueprintAssignable, Category = "Events")
   FOnEnemyDied OnEnemyDied;
 
+  /** Get combo attack montage */
+  UAnimMontage *GetComboAttackMontage() const { return ComboAttackMontage; }
+
+  /** Get charged attack montage */
+  UAnimMontage *GetChargedAttackMontage() const { return ChargedAttackMontage; }
+
+  /** Get pelvis bone name */
+  FName GetPelvisBoneName() const { return PelvisBoneName; }
+
 public:
   /** Performs an AI-initiated combo attack. Number of hits will be decided by
    * this character */
@@ -237,26 +252,21 @@ public:
   /** Handles healing events */
   virtual void ApplyHealing(float Healing, AActor *Healer) override;
 
-  /** Allows the enemy to react to incoming attacks */
+  /** Notifies of danger */
   virtual void NotifyDanger(const FVector &DangerLocation,
                             AActor *DangerSource) override;
 
   // ~end ICombatDamageable interface
 
-protected:
+public:
   /** Removes this character from the level after it dies */
   void RemoveFromLevel();
 
 public:
-  /** Overrides the default TakeDamage functionality */
-  virtual float TakeDamage(float Damage, struct FDamageEvent const &DamageEvent,
-                           AController *EventInstigator,
-                           AActor *DamageCauser) override;
-
   /** Overrides landing to reset damage ragdoll physics */
   virtual void Landed(const FHitResult &Hit) override;
 
-protected:
+public:
   /** Blueprint handler to play damage received effects */
   UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
   void ReceivedDamage(float Damage, const FVector &ImpactPoint,

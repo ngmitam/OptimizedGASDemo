@@ -17,6 +17,10 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "TimerManager.h"
+#include "Gameplay/CombatReceiveDamageAbility.h"
+#include "Gameplay/CombatDeathAbility.h"
+#include "Gameplay/CombatAttackTraceAbility.h"
+#include "Gameplay/CombatDamageGameplayEffect.h"
 
 ACombatCharacter::ACombatCharacter() {
   PrimaryActorTick.bCanEverTick = true;
@@ -52,15 +56,41 @@ ACombatCharacter::ACombatCharacter() {
   HealthComponent =
       CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
 
+  // create the ability system component
+  AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(
+      TEXT("AbilitySystemComponent"));
+
+  // create the attribute set
+  AttributeSet =
+      CreateDefaultSubobject<UCombatAttributeSet>(TEXT("AttributeSet"));
+
+  // Create default pawn data with abilities
+  PawnData = CreateDefaultSubobject<UCombatPawnData>(TEXT("PawnData"));
+  if (PawnData) {
+    // Set default attributes
+    PawnData->DefaultHealth = 100.0f;
+    PawnData->DefaultMaxHealth = 100.0f;
+    PawnData->DefaultDamage = 5.0f;
+    PawnData->DefaultKnockbackImpulse = 500.0f;
+    PawnData->DefaultLaunchImpulse = 300.0f;
+    PawnData->DefaultTraceDistance = 75.0f;
+    PawnData->DefaultTraceRadius = 75.0f;
+
+    // Add granted abilities
+    PawnData->GrantedAbilities.Add(UCombatReceiveDamageAbility::StaticClass());
+    PawnData->GrantedAbilities.Add(UCombatDeathAbility::StaticClass());
+    PawnData->GrantedAbilities.Add(UCombatAttackTraceAbility::StaticClass());
+
+    // Add granted effects (none for now, but structure is ready)
+    // PawnData->GrantedEffects.Add(SomeEffectClass::StaticClass());
+  }
+
   // set the player tag
   Tags.Add(FName("Player"));
 }
 
 UAbilitySystemComponent *ACombatCharacter::GetAbilitySystemComponent() const {
-  if (ACombatPlayerState *PS = GetPlayerState<ACombatPlayerState>()) {
-    return PS->GetAbilitySystemComponent();
-  }
-  return nullptr;
+  return AbilitySystemComponent;
 }
 
 void ACombatCharacter::Move(const FInputActionValue &Value) {
@@ -131,8 +161,7 @@ void ACombatCharacter::DoComboAttackStart() {
   if (bIsAttacking) {
     // cache the input time so we can check it later
     CachedAttackInputTime = GetWorld()->GetTimeSeconds();
-
-    return;
+    return; // Don't start a new attack while already attacking
   }
 
   // perform a combo attack
@@ -249,61 +278,15 @@ void ACombatCharacter::AttackMontageEnded(UAnimMontage *Montage,
 }
 
 void ACombatCharacter::DoAttackTrace(FName DamageSourceBone) {
-  float Damage = 0.0f;
-  float Knockback = 0.0f;
-  float Launch = 0.0f;
+  // Send gameplay event to activate attack trace ability
+  if (AbilitySystemComponent) {
+    FGameplayEventData EventData;
+    EventData.Instigator = this;
+    EventData.Target = this;
 
-  if (UAbilitySystemComponent *ASC = GetAbilitySystemComponent()) {
-    Damage =
-        ASC->GetNumericAttribute(UCombatAttributeSet::GetDamageAttribute());
-    Knockback = ASC->GetNumericAttribute(
-        UCombatAttributeSet::GetKnockbackImpulseAttribute());
-    Launch = ASC->GetNumericAttribute(
-        UCombatAttributeSet::GetLaunchImpulseAttribute());
-  }
-
-  // sweep for objects in front of the character to be hit by the attack
-  TArray<FHitResult> OutHits;
-
-  // start at the provided socket location, sweep forward
-  const FVector TraceStart = GetMesh()->GetSocketLocation(DamageSourceBone);
-  const FVector TraceEnd =
-      TraceStart + (GetActorForwardVector() * MeleeTraceDistance);
-
-  // check for pawn and world dynamic collision object types
-  FCollisionObjectQueryParams ObjectParams;
-  ObjectParams.AddObjectTypesToQuery(ECC_Pawn);
-  ObjectParams.AddObjectTypesToQuery(ECC_WorldDynamic);
-
-  // use a sphere shape for the sweep
-  FCollisionShape CollisionShape;
-  CollisionShape.SetSphere(MeleeTraceRadius);
-
-  // ignore self
-  FCollisionQueryParams QueryParams;
-  QueryParams.AddIgnoredActor(this);
-
-  if (GetWorld()->SweepMultiByObjectType(OutHits, TraceStart, TraceEnd,
-                                         FQuat::Identity, ObjectParams,
-                                         CollisionShape, QueryParams)) {
-    // iterate over each object hit
-    for (const FHitResult &CurrentHit : OutHits) {
-      // check if we've hit a damageable actor
-      ICombatDamageable *Damageable =
-          Cast<ICombatDamageable>(CurrentHit.GetActor());
-
-      if (Damageable) {
-        // knock upwards and away from the impact normal
-        const FVector Impulse = (CurrentHit.ImpactNormal * -Knockback) +
-                                (FVector::UpVector * Launch);
-
-        // pass the damage event to the actor
-        Damageable->ApplyDamage(Damage, this, CurrentHit.ImpactPoint, Impulse);
-
-        // call the BP handler to play effects, etc.
-        DealtDamage(Damage, CurrentHit.ImpactPoint);
-      }
-    }
+    AbilitySystemComponent->HandleGameplayEvent(
+        FGameplayTag::RequestGameplayTag(FName("Event.Attack.Start")),
+        &EventData);
   }
 }
 
@@ -388,31 +371,45 @@ void ACombatCharacter::NotifyEnemiesOfAttack() {
 void ACombatCharacter::ApplyDamage(float Damage, AActor *DamageCauser,
                                    const FVector &DamageLocation,
                                    const FVector &DamageImpulse) {
-  // pass the damage event to the actor
-  FDamageEvent DamageEvent;
-  const float ActualDamage =
-      TakeDamage(Damage, DamageEvent, nullptr, DamageCauser);
+  // Send gameplay event to activate receive damage ability
+  if (AbilitySystemComponent) {
+    FGameplayEventData EventData;
+    EventData.EventMagnitude = Damage;
+    EventData.Instigator = DamageCauser;
+    EventData.Target = this;
 
-  // only process knockback and effects if we received nonzero damage
-  if (ActualDamage > 0.0f) {
-    // apply the knockback impulse
-    GetCharacterMovement()->AddImpulse(DamageImpulse, true);
+    UDamageEventData *DamageData = NewObject<UDamageEventData>();
+    DamageData->Location = DamageLocation;
+    DamageData->Impulse = DamageImpulse;
+    EventData.OptionalObject = DamageData;
 
-    // is the character ragdolling?
-    if (GetMesh()->IsSimulatingPhysics()) {
-      // apply an impulse to the ragdoll
-      GetMesh()->AddImpulseAtLocation(DamageImpulse * GetMesh()->GetMass(),
-                                      DamageLocation);
-    }
-
-    // pass control to BP to play effects, etc.
-    ReceivedDamage(ActualDamage, DamageLocation, DamageImpulse.GetSafeNormal());
+    AbilitySystemComponent->HandleGameplayEvent(
+        FGameplayTag::RequestGameplayTag(FName("Event.Damage.Received")),
+        &EventData);
+  } else {
+    // Fallback for objects without ASC: call ReceivedDamage for effects
+    ReceivedDamage(Damage, DamageLocation, -DamageImpulse.GetSafeNormal());
   }
 }
 
 void ACombatCharacter::HandleDeath() {
-  // disable movement while we're dead
-  GetCharacterMovement()->DisableMovement();
+  // Send gameplay event to activate death ability
+  if (AbilitySystemComponent) {
+    FGameplayEventData EventData;
+    EventData.Instigator = this;
+    EventData.Target = this;
+
+    AbilitySystemComponent->HandleGameplayEvent(
+        FGameplayTag::RequestGameplayTag(FName("Event.Death")), &EventData);
+  } else {
+    // disable movement while we're dead
+    GetCharacterMovement()->DisableMovement();
+
+    // schedule respawning
+    GetWorld()->GetTimerManager().SetTimer(RespawnTimer, this,
+                                           &ACombatCharacter::RespawnCharacter,
+                                           RespawnTime, false);
+  }
 
   // enable full ragdoll physics
   GetMesh()->SetSimulatePhysics(true);
@@ -422,53 +419,10 @@ void ACombatCharacter::HandleDeath() {
 
   // pull back the camera
   GetCameraBoom()->TargetArmLength = DeathCameraDistance;
-
-  // schedule respawning
-  GetWorld()->GetTimerManager().SetTimer(RespawnTimer, this,
-                                         &ACombatCharacter::RespawnCharacter,
-                                         RespawnTime, false);
 }
 
 void ACombatCharacter::ApplyHealing(float Healing, AActor *Healer) {
   // stub
-}
-
-void ACombatCharacter::NotifyDanger(const FVector &DangerLocation,
-                                    AActor *DangerSource) {
-  // stub
-}
-
-void ACombatCharacter::RespawnCharacter() {
-  // destroy the character and let it be respawned by the Player Controller
-  Destroy();
-}
-
-float ACombatCharacter::TakeDamage(float Damage,
-                                   struct FDamageEvent const &DamageEvent,
-                                   AController *EventInstigator,
-                                   AActor *DamageCauser) {
-  if (HealthComponent && !HealthComponent->IsDead()) {
-    float CurrentHealth = HealthComponent->GetHealth();
-    float NewHealth = FMath::Max(0.0f, CurrentHealth - Damage);
-
-    // Set health via GAS
-    if (UAbilitySystemComponent *ASC = GetAbilitySystemComponent()) {
-      ASC->SetNumericAttributeBase(UCombatAttributeSet::GetHealthAttribute(),
-                                   NewHealth);
-    }
-
-    if (NewHealth <= 0.0f) {
-      HandleDeath();
-    } else {
-      // enable partial ragdoll physics, but keep the pelvis vertical
-      GetMesh()->SetPhysicsBlendWeight(0.5f);
-      GetMesh()->SetBodySimulatePhysics(PelvisBoneName, false);
-    }
-
-    return Damage;
-  }
-
-  return 0.0f;
 }
 
 void ACombatCharacter::Landed(const FHitResult &Hit) {
@@ -499,6 +453,61 @@ void ACombatCharacter::BeginPlay() {
 
   // reset HP to maximum
   ResetHP();
+
+  // Initialize GAS
+  if (AbilitySystemComponent) {
+    AbilitySystemComponent->InitAbilityActorInfo(this, this);
+
+    // Initialize attributes
+    if (PawnData) {
+      // Load from data table if specified
+      PawnData->LoadFromDataTable();
+
+      // Set default attributes from PawnData
+      AbilitySystemComponent->SetNumericAttributeBase(
+          AttributeSet->GetHealthAttribute(), PawnData->DefaultHealth);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          AttributeSet->GetMaxHealthAttribute(), PawnData->DefaultMaxHealth);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          AttributeSet->GetDamageAttribute(), PawnData->DefaultDamage);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          AttributeSet->GetKnockbackImpulseAttribute(),
+          PawnData->DefaultKnockbackImpulse);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          AttributeSet->GetLaunchImpulseAttribute(),
+          PawnData->DefaultLaunchImpulse);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          AttributeSet->GetTraceDistanceAttribute(),
+          PawnData->DefaultTraceDistance);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          AttributeSet->GetTraceRadiusAttribute(),
+          PawnData->DefaultTraceRadius);
+
+      // Grant abilities
+      for (TSubclassOf<UGameplayAbility> AbilityClass :
+           PawnData->GrantedAbilities) {
+        if (AbilityClass) {
+          FGameplayAbilitySpec AbilitySpec(AbilityClass, 1);
+          AbilitySystemComponent->GiveAbility(AbilitySpec);
+        }
+      }
+
+      // Apply granted effects
+      for (TSubclassOf<UGameplayEffect> EffectClass :
+           PawnData->GrantedEffects) {
+        if (EffectClass) {
+          FGameplayEffectSpecHandle EffectSpecHandle =
+              AbilitySystemComponent->MakeOutgoingSpec(
+                  EffectClass, 1.0f,
+                  AbilitySystemComponent->MakeEffectContext());
+          if (EffectSpecHandle.IsValid()) {
+            AbilitySystemComponent->ApplyGameplayEffectSpecToTarget(
+                *EffectSpecHandle.Data.Get(), AbilitySystemComponent);
+          }
+        }
+      }
+    }
+  }
 
   // Initialize health component
   if (UAbilitySystemComponent *ASC = GetAbilitySystemComponent()) {
@@ -579,4 +588,16 @@ void ACombatCharacter::OnMaxHealthComponentChanged(float NewMaxHealth) {
     float CurrentHealth = HealthComponent->GetHealth();
     LifeBarWidget->SetLifePercentage(CurrentHealth / NewMaxHealth);
   }
+}
+
+void ACombatCharacter::NotifyDanger(const FVector &DangerLocation,
+                                    AActor *DangerSource) {
+  // Implement if needed, e.g., play animation or something
+}
+
+void ACombatCharacter::RespawnCharacter() {
+  // Destroy the current character
+  Destroy();
+
+  // The PlayerController will handle spawning a new one
 }

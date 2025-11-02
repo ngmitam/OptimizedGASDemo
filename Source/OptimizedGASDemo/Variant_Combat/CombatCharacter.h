@@ -10,6 +10,10 @@
 #include "CombatDamageable.h"
 #include "Animation/AnimInstance.h"
 #include "HealthComponent.h"
+#include "CombatAttributeSet.h"
+#include "CombatPawnData.h"
+#include "EnhancedInputComponent.h"
+#include "Gameplay/DamageEventData.h"
 #include "CombatCharacter.generated.h"
 
 class USpringArmComponent;
@@ -55,6 +59,20 @@ class ACombatCharacter : public ACharacter,
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
             meta = (AllowPrivateAccess = "true"))
   UHealthComponent *HealthComponent;
+
+  /** The ability system component for this character */
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
+            meta = (AllowPrivateAccess = "true"))
+  UAbilitySystemComponent *AbilitySystemComponent;
+
+  /** The attribute set for this character */
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
+            meta = (AllowPrivateAccess = "true"))
+  UCombatAttributeSet *AttributeSet;
+
+  /** Pawn data for attributes and abilities */
+  UPROPERTY(EditDefaultsOnly, Category = "GAS")
+  UCombatPawnData *PawnData;
 
 protected:
   /** Jump Input Action */
@@ -213,6 +231,15 @@ public:
   virtual UAbilitySystemComponent *GetAbilitySystemComponent() const override;
   // ~end IAbilitySystemInterface
 
+  /** Get combo attack montage */
+  UAnimMontage *GetComboAttackMontage() const { return ComboAttackMontage; }
+
+  /** Get charged attack montage */
+  UAnimMontage *GetChargedAttackMontage() const { return ChargedAttackMontage; }
+
+  /** Get pelvis bone name */
+  FName GetPelvisBoneName() const { return PelvisBoneName; }
+
 protected:
   /** Called for movement input */
   void Move(const FInputActionValue &Value);
@@ -304,7 +331,7 @@ public:
   /** Handles healing events */
   virtual void ApplyHealing(float Healing, AActor *Healer) override;
 
-  /** Allows reaction to incoming attacks */
+  /** Notifies of danger */
   virtual void NotifyDanger(const FVector &DangerLocation,
                             AActor *DangerSource) override;
 
@@ -314,23 +341,18 @@ public:
   void RespawnCharacter();
 
 public:
-  /** Overrides the default TakeDamage functionality */
-  virtual float TakeDamage(float Damage, struct FDamageEvent const &DamageEvent,
-                           AController *EventInstigator,
-                           AActor *DamageCauser) override;
-
   /** Overrides landing to reset damage ragdoll physics */
   virtual void Landed(const FHitResult &Hit) override;
 
-protected:
-  /** Blueprint handler to play damage dealt effects */
-  UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
-  void DealtDamage(float Damage, const FVector &ImpactPoint);
-
+public:
   /** Blueprint handler to play damage received effects */
   UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
   void ReceivedDamage(float Damage, const FVector &ImpactPoint,
                       const FVector &DamageDirection);
+
+  /** Blueprint handler to play damage dealt effects */
+  UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
+  void DealtDamage(float Damage, const FVector &ImpactPoint);
 
 protected:
   /** Initialization */

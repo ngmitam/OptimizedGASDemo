@@ -13,6 +13,10 @@
 #include "AbilitySystemComponent.h"
 #include "CombatAttributeSet.h"
 #include "GameplayTagsManager.h"
+#include "Gameplay/CombatReceiveDamageAbility.h"
+#include "Gameplay/CombatDeathAbility.h"
+#include "Gameplay/CombatAttackTraceAbility.h"
+#include "Gameplay/CombatDamageGameplayEffect.h"
 
 ACombatEnemy::ACombatEnemy() {
   PrimaryActorTick.bCanEverTick = true;
@@ -46,6 +50,24 @@ ACombatEnemy::ACombatEnemy() {
   // create the attribute set
   AttributeSet =
       CreateDefaultSubobject<UCombatAttributeSet>(TEXT("AttributeSet"));
+
+  // Create default pawn data with abilities
+  PawnData = CreateDefaultSubobject<UCombatPawnData>(TEXT("PawnData"));
+  if (PawnData) {
+    // Set default attributes
+    PawnData->DefaultHealth = MaxHP;
+    PawnData->DefaultMaxHealth = MaxHP;
+    PawnData->DefaultDamage = MeleeDamage;
+    PawnData->DefaultKnockbackImpulse = MeleeKnockbackImpulse;
+    PawnData->DefaultLaunchImpulse = MeleeLaunchImpulse;
+    PawnData->DefaultTraceDistance = MeleeTraceDistance;
+    PawnData->DefaultTraceRadius = MeleeTraceRadius;
+
+    // Add granted abilities
+    PawnData->GrantedAbilities.Add(UCombatReceiveDamageAbility::StaticClass());
+    PawnData->GrantedAbilities.Add(UCombatDeathAbility::StaticClass());
+    PawnData->GrantedAbilities.Add(UCombatAttackTraceAbility::StaticClass());
+  }
 
   // set the collision capsule size
   GetCapsuleComponent()->SetCapsuleSize(35.0f, 90.0f);
@@ -137,61 +159,15 @@ const FVector &ACombatEnemy::GetLastDangerLocation() const {
 float ACombatEnemy::GetLastDangerTime() const { return LastDangerTime; }
 
 void ACombatEnemy::DoAttackTrace(FName DamageSourceBone) {
-  float Damage = MeleeDamage;
-  float Knockback = MeleeKnockbackImpulse;
-  float Launch = MeleeLaunchImpulse;
-
+  // Send gameplay event to activate attack trace ability
   if (AbilitySystemComponent) {
-    Damage = AbilitySystemComponent->GetNumericAttribute(
-        UCombatAttributeSet::GetDamageAttribute());
-    Knockback = AbilitySystemComponent->GetNumericAttribute(
-        UCombatAttributeSet::GetKnockbackImpulseAttribute());
-    Launch = AbilitySystemComponent->GetNumericAttribute(
-        UCombatAttributeSet::GetLaunchImpulseAttribute());
-  }
+    FGameplayEventData EventData;
+    EventData.Instigator = this;
+    EventData.Target = this;
 
-  // sweep for objects in front of the character to be hit by the attack
-  TArray<FHitResult> OutHits;
-
-  // start at the provided socket location, sweep forward
-  const FVector TraceStart = GetMesh()->GetSocketLocation(DamageSourceBone);
-  const FVector TraceEnd =
-      TraceStart + (GetActorForwardVector() * MeleeTraceDistance);
-
-  // enemies only affect Pawn collision objects; they don't knock back boxes
-  FCollisionObjectQueryParams ObjectParams;
-  ObjectParams.AddObjectTypesToQuery(ECC_Pawn);
-
-  // use a sphere shape for the sweep
-  FCollisionShape CollisionShape;
-  CollisionShape.SetSphere(MeleeTraceRadius);
-
-  // ignore self
-  FCollisionQueryParams QueryParams;
-  QueryParams.AddIgnoredActor(this);
-
-  if (GetWorld()->SweepMultiByObjectType(OutHits, TraceStart, TraceEnd,
-                                         FQuat::Identity, ObjectParams,
-                                         CollisionShape, QueryParams)) {
-    // iterate over each object hit
-    for (const FHitResult &CurrentHit : OutHits) {
-      /** does the actor have the player tag? */
-      if (CurrentHit.GetActor()->ActorHasTag(FName("Player"))) {
-        // check if the actor is damageable
-        ICombatDamageable *Damageable =
-            Cast<ICombatDamageable>(CurrentHit.GetActor());
-
-        if (Damageable) {
-          // knock upwards and away from the impact normal
-          const FVector Impulse = (CurrentHit.ImpactNormal * -Knockback) +
-                                  (FVector::UpVector * Launch);
-
-          // pass the damage event to the actor
-          Damageable->ApplyDamage(Damage, this, CurrentHit.ImpactPoint,
-                                  Impulse);
-        }
-      }
-    }
+    AbilitySystemComponent->HandleGameplayEvent(
+        FGameplayTag::RequestGameplayTag(FName("Event.Attack.Start")),
+        &EventData);
   }
 }
 
@@ -226,101 +202,58 @@ void ACombatEnemy::CheckChargedAttack() {
 void ACombatEnemy::ApplyDamage(float Damage, AActor *DamageCauser,
                                const FVector &DamageLocation,
                                const FVector &DamageImpulse) {
+  // Send gameplay event to activate receive damage ability
+  if (AbilitySystemComponent) {
+    FGameplayEventData EventData;
+    EventData.EventMagnitude = Damage;
+    EventData.Instigator = DamageCauser;
+    EventData.Target = this;
 
-  // pass the damage event to the actor
-  FDamageEvent DamageEvent;
-  const float ActualDamage =
-      TakeDamage(Damage, DamageEvent, nullptr, DamageCauser);
+    UDamageEventData *DamageData = NewObject<UDamageEventData>();
+    DamageData->Location = DamageLocation;
+    DamageData->Impulse = DamageImpulse;
+    EventData.OptionalObject = DamageData;
 
-  // only process knockback and effects if we received nonzero damage
-  if (ActualDamage > 0.0f) {
-    // apply the knockback impulse
-    GetCharacterMovement()->AddImpulse(DamageImpulse, true);
-
-    // is the character ragdolling?
-    if (GetMesh()->IsSimulatingPhysics()) {
-      // apply an impulse to the ragdoll
-      GetMesh()->AddImpulseAtLocation(DamageImpulse * GetMesh()->GetMass(),
-                                      DamageLocation);
-    }
-
-    // stop the attack montages to interrupt the attack
-    if (UAnimInstance *AnimInstance = GetMesh()->GetAnimInstance()) {
-      AnimInstance->Montage_Stop(0.1f, ComboAttackMontage);
-      AnimInstance->Montage_Stop(0.1f, ChargedAttackMontage);
-    }
-
-    // pass control to BP to play effects, etc.
-    ReceivedDamage(ActualDamage, DamageLocation, DamageImpulse.GetSafeNormal());
+    AbilitySystemComponent->HandleGameplayEvent(
+        FGameplayTag::RequestGameplayTag(FName("Event.Damage.Received")),
+        &EventData);
+  } else {
+    // Fallback for objects without ASC: call ReceivedDamage for effects
+    ReceivedDamage(Damage, DamageLocation, -DamageImpulse.GetSafeNormal());
   }
 }
 
 void ACombatEnemy::HandleDeath() {
+  // Activate death ability
+  if (AbilitySystemComponent) {
+    FGameplayTagContainer AbilityTags;
+    AbilityTags.AddTag(
+        FGameplayTag::RequestGameplayTag(FName("Ability.Death")));
+    AbilitySystemComponent->TryActivateAbilitiesByTag(AbilityTags);
+  } else {
+    // disable the collision capsule to avoid being hit again while dead
+    GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+    // disable character movement
+    GetCharacterMovement()->DisableMovement();
+
+    // set up the death timer
+    GetWorld()->GetTimerManager().SetTimer(
+        DeathTimer, this, &ACombatEnemy::RemoveFromLevel, DeathRemovalTime);
+  }
+
   // hide the life bar
   LifeBar->SetHiddenInGame(true);
-
-  // disable the collision capsule to avoid being hit again while dead
-  GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-
-  // disable character movement
-  GetCharacterMovement()->DisableMovement();
 
   // enable full ragdoll physics
   GetMesh()->SetSimulatePhysics(true);
 
   // call the died delegate to notify any subscribers
   OnEnemyDied.Broadcast();
-
-  // set up the death timer
-  GetWorld()->GetTimerManager().SetTimer(
-      DeathTimer, this, &ACombatEnemy::RemoveFromLevel, DeathRemovalTime);
 }
 
 void ACombatEnemy::ApplyHealing(float Healing, AActor *Healer) {
   // stub
-}
-
-void ACombatEnemy::NotifyDanger(const FVector &DangerLocation,
-                                AActor *DangerSource) {
-  // ensure we're being attacked by the player
-  if (DangerSource && DangerSource->ActorHasTag(FName("Player"))) {
-    // save the danger location and game time
-    LastDangerLocation = DangerLocation;
-    LastDangerTime = GetWorld()->GetTimeSeconds();
-  }
-}
-
-void ACombatEnemy::RemoveFromLevel() {
-  // destroy this actor
-  Destroy();
-}
-
-float ACombatEnemy::TakeDamage(float Damage,
-                               struct FDamageEvent const &DamageEvent,
-                               AController *EventInstigator,
-                               AActor *DamageCauser) {
-  if (HealthComponent && !HealthComponent->IsDead()) {
-    float CurrentHealth = HealthComponent->GetHealth();
-    float NewHealth = FMath::Max(0.0f, CurrentHealth - Damage);
-
-    // Set health via GAS
-    if (AbilitySystemComponent) {
-      AbilitySystemComponent->SetNumericAttributeBase(
-          UCombatAttributeSet::GetHealthAttribute(), NewHealth);
-    }
-
-    if (NewHealth <= 0.0f) {
-      HandleDeath();
-    } else {
-      // enable partial ragdoll physics, but keep the pelvis vertical
-      GetMesh()->SetPhysicsBlendWeight(0.5f);
-      GetMesh()->SetBodySimulatePhysics(PelvisBoneName, false);
-    }
-
-    return Damage;
-  }
-
-  return 0.0f;
 }
 
 void ACombatEnemy::Landed(const FHitResult &Hit) {
@@ -337,26 +270,84 @@ void ACombatEnemy::Landed(const FHitResult &Hit) {
 }
 
 void ACombatEnemy::BeginPlay() {
-  // reset HP to maximum
+  // reset HP to maximum (keep this for StateTree compatibility)
   CurrentHP = MaxHP;
 
-  // we top the HP before BeginPlay so StateTree picks it up at the right value
   Super::BeginPlay();
 
-  // init ability system
+  // get the life bar widget from the widget comp
+  LifeBarWidget = Cast<UCombatLifeBar>(LifeBar->GetUserWidgetObject());
+  check(LifeBarWidget);
+
+  // Initialize GAS
   if (AbilitySystemComponent) {
     AbilitySystemComponent->InitAbilityActorInfo(this, this);
-    AbilitySystemComponent->SetNumericAttributeBase(
-        UCombatAttributeSet::GetMaxHealthAttribute(), MaxHP);
-    AbilitySystemComponent->SetNumericAttributeBase(
-        UCombatAttributeSet::GetHealthAttribute(), CurrentHP);
-    AbilitySystemComponent->SetNumericAttributeBase(
-        UCombatAttributeSet::GetDamageAttribute(), MeleeDamage);
-    AbilitySystemComponent->SetNumericAttributeBase(
-        UCombatAttributeSet::GetKnockbackImpulseAttribute(),
-        MeleeKnockbackImpulse);
-    AbilitySystemComponent->SetNumericAttributeBase(
-        UCombatAttributeSet::GetLaunchImpulseAttribute(), MeleeLaunchImpulse);
+
+    if (PawnData) {
+      // Load from data table if specified
+      PawnData->LoadFromDataTable();
+
+      // Set default attributes from PawnData
+      AbilitySystemComponent->SetNumericAttributeBase(
+          AttributeSet->GetHealthAttribute(), PawnData->DefaultHealth);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          AttributeSet->GetMaxHealthAttribute(), PawnData->DefaultMaxHealth);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          AttributeSet->GetDamageAttribute(), PawnData->DefaultDamage);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          AttributeSet->GetKnockbackImpulseAttribute(),
+          PawnData->DefaultKnockbackImpulse);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          AttributeSet->GetLaunchImpulseAttribute(),
+          PawnData->DefaultLaunchImpulse);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          AttributeSet->GetTraceDistanceAttribute(),
+          PawnData->DefaultTraceDistance);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          AttributeSet->GetTraceRadiusAttribute(),
+          PawnData->DefaultTraceRadius);
+
+      // Grant abilities
+      for (TSubclassOf<UGameplayAbility> AbilityClass :
+           PawnData->GrantedAbilities) {
+        if (AbilityClass) {
+          FGameplayAbilitySpec AbilitySpec(AbilityClass, 1);
+          AbilitySystemComponent->GiveAbility(AbilitySpec);
+        }
+      }
+
+      // Apply granted effects
+      for (TSubclassOf<UGameplayEffect> EffectClass :
+           PawnData->GrantedEffects) {
+        if (EffectClass) {
+          FGameplayEffectSpecHandle EffectSpecHandle =
+              AbilitySystemComponent->MakeOutgoingSpec(
+                  EffectClass, 1.0f,
+                  AbilitySystemComponent->MakeEffectContext());
+          if (EffectSpecHandle.IsValid()) {
+            AbilitySystemComponent->ApplyGameplayEffectSpecToTarget(
+                *EffectSpecHandle.Data.Get(), AbilitySystemComponent);
+          }
+        }
+      }
+    } else {
+      // Fallback to old initialization
+      AbilitySystemComponent->SetNumericAttributeBase(
+          UCombatAttributeSet::GetMaxHealthAttribute(), MaxHP);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          UCombatAttributeSet::GetHealthAttribute(), CurrentHP);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          UCombatAttributeSet::GetDamageAttribute(), MeleeDamage);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          UCombatAttributeSet::GetKnockbackImpulseAttribute(),
+          MeleeKnockbackImpulse);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          UCombatAttributeSet::GetLaunchImpulseAttribute(), MeleeLaunchImpulse);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          UCombatAttributeSet::GetTraceDistanceAttribute(), MeleeTraceDistance);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          UCombatAttributeSet::GetTraceRadiusAttribute(), MeleeTraceRadius);
+    }
 
     // Initialize health component
     HealthComponent->InitializeWithAbilitySystem(AbilitySystemComponent);
@@ -367,10 +358,6 @@ void ACombatEnemy::BeginPlay() {
     HealthComponent->OnMaxHealthChanged.AddUObject(
         this, &ACombatEnemy::OnMaxHealthComponentChanged);
   }
-
-  // get the life bar widget from the widget comp
-  LifeBarWidget = Cast<UCombatLifeBar>(LifeBar->GetUserWidgetObject());
-  check(LifeBarWidget);
 
   // fill the life bar
   LifeBarWidget->SetLifePercentage(1.0f);
@@ -397,3 +384,11 @@ void ACombatEnemy::OnMaxHealthComponentChanged(float NewMaxHealth) {
     LifeBarWidget->SetLifePercentage(CurrentHP / MaxHP);
   }
 }
+
+void ACombatEnemy::NotifyDanger(const FVector &DangerLocation,
+                                AActor *DangerSource) {
+  LastDangerLocation = DangerLocation;
+  LastDangerTime = GetWorld()->GetTimeSeconds();
+}
+
+void ACombatEnemy::RemoveFromLevel() { Destroy(); }

@@ -55,6 +55,17 @@ public:
   FGameplayAttributeData LaunchImpulse;
   ATTRIBUTE_ACCESSORS(UCombatAttributeSet, LaunchImpulse)
 
+  // Trace
+  UPROPERTY(BlueprintReadOnly, Category = "Trace",
+            ReplicatedUsing = OnRep_TraceDistance)
+  FGameplayAttributeData TraceDistance;
+  ATTRIBUTE_ACCESSORS(UCombatAttributeSet, TraceDistance)
+
+  UPROPERTY(BlueprintReadOnly, Category = "Trace",
+            ReplicatedUsing = OnRep_TraceRadius)
+  FGameplayAttributeData TraceRadius;
+  ATTRIBUTE_ACCESSORS(UCombatAttributeSet, TraceRadius)
+
 protected:
   UFUNCTION()
   virtual void OnRep_Health(const FGameplayAttributeData &OldHealth);
@@ -72,4 +83,11 @@ protected:
   UFUNCTION()
   virtual void
   OnRep_LaunchImpulse(const FGameplayAttributeData &OldLaunchImpulse);
+
+  UFUNCTION()
+  virtual void
+  OnRep_TraceDistance(const FGameplayAttributeData &OldTraceDistance);
+
+  UFUNCTION()
+  virtual void OnRep_TraceRadius(const FGameplayAttributeData &OldTraceRadius);
 };

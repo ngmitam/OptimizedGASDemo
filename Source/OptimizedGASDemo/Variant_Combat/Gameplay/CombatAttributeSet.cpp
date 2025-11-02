@@ -10,6 +10,8 @@ UCombatAttributeSet::UCombatAttributeSet() {
   InitDamage(10.0f);
   InitKnockbackImpulse(250.0f);
   InitLaunchImpulse(300.0f);
+  InitTraceDistance(75.0f);
+  InitTraceRadius(75.0f);
 }
 
 void UCombatAttributeSet::GetLifetimeReplicatedProps(
@@ -25,6 +27,10 @@ void UCombatAttributeSet::GetLifetimeReplicatedProps(
   DOREPLIFETIME_CONDITION_NOTIFY(UCombatAttributeSet, KnockbackImpulse,
                                  COND_None, REPNOTIFY_Always);
   DOREPLIFETIME_CONDITION_NOTIFY(UCombatAttributeSet, LaunchImpulse, COND_None,
+                                 REPNOTIFY_Always);
+  DOREPLIFETIME_CONDITION_NOTIFY(UCombatAttributeSet, TraceDistance, COND_None,
+                                 REPNOTIFY_Always);
+  DOREPLIFETIME_CONDITION_NOTIFY(UCombatAttributeSet, TraceRadius, COND_None,
                                  REPNOTIFY_Always);
 }
 
@@ -53,4 +59,15 @@ void UCombatAttributeSet::OnRep_LaunchImpulse(
     const FGameplayAttributeData &OldLaunchImpulse) {
   GAMEPLAYATTRIBUTE_REPNOTIFY(UCombatAttributeSet, LaunchImpulse,
                               OldLaunchImpulse);
+}
+
+void UCombatAttributeSet::OnRep_TraceDistance(
+    const FGameplayAttributeData &OldTraceDistance) {
+  GAMEPLAYATTRIBUTE_REPNOTIFY(UCombatAttributeSet, TraceDistance,
+                              OldTraceDistance);
+}
+
+void UCombatAttributeSet::OnRep_TraceRadius(
+    const FGameplayAttributeData &OldTraceRadius) {
+  GAMEPLAYATTRIBUTE_REPNOTIFY(UCombatAttributeSet, TraceRadius, OldTraceRadius);
 }

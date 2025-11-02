@@ -1,0 +1,164 @@
+// Copyright Nguyen Minh Tam. All Rights Reserved.
+
+#include "CombatAttackTraceAbility.h"
+#include "CombatCharacter.h"
+#include "AI/CombatEnemy.h"
+#include "AbilitySystemComponent.h"
+#include "AbilitySystemGlobals.h"
+#include "GameplayTagsManager.h"
+#include "Kismet/KismetSystemLibrary.h"
+#include "CombatGameplayEffect.h"
+#include "CombatAttributeSet.h"
+
+UCombatAttackTraceAbility::UCombatAttackTraceAbility() {
+  InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
+  NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
+
+  // Set ability tags
+  FGameplayTagContainer AssetTags;
+  AssetTags.AddTag(
+      FGameplayTag::RequestGameplayTag(FName("Ability.Attack.Trace")));
+  SetAssetTags(AssetTags);
+
+  // Block other attack abilities while this is active
+  BlockAbilitiesWithTag.AddTag(
+      FGameplayTag::RequestGameplayTag(FName("Ability.Attack")));
+
+  // Cancel this ability if death occurs
+  CancelAbilitiesWithTag.AddTag(
+      FGameplayTag::RequestGameplayTag(FName("Ability.Death")));
+
+  // Add trigger to activate on attack start event
+  FAbilityTriggerData TriggerData;
+  TriggerData.TriggerTag =
+      FGameplayTag::RequestGameplayTag(FName("Event.Attack.Start"));
+  TriggerData.TriggerSource = EGameplayAbilityTriggerSource::GameplayEvent;
+  AbilityTriggers.Add(TriggerData);
+}
+
+void UCombatAttackTraceAbility::ActivateAbility(
+    const FGameplayAbilitySpecHandle Handle,
+    const FGameplayAbilityActorInfo *ActorInfo,
+    const FGameplayAbilityActivationInfo ActivationInfo,
+    const FGameplayEventData *TriggerEventData) {
+  Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
+
+  if (!CommitAbility(Handle, ActorInfo, ActivationInfo)) {
+    EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+    return;
+  }
+
+  // Perform attack trace immediately
+  PerformAttackTrace();
+
+  // End ability immediately after performing trace
+  EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
+}
+
+void UCombatAttackTraceAbility::PerformAttackTrace() {
+  if (!CurrentActorInfo->AvatarActor.IsValid()) {
+    return;
+  }
+
+  AActor *AvatarActor = CurrentActorInfo->AvatarActor.Get();
+
+  // Get damage from GAS attribute
+  UAbilitySystemComponent *ASC = GetAbilitySystemComponentFromActorInfo();
+  float Damage = DamageAmount;
+  if (ASC) {
+    Damage =
+        ASC->GetNumericAttribute(UCombatAttributeSet::GetDamageAttribute());
+  }
+
+  // Get knockback and launch from GAS attributes
+  float KnockbackValue = KnockbackImpulse;
+  float LaunchValue = LaunchImpulse;
+  if (ASC) {
+    KnockbackValue = ASC->GetNumericAttribute(
+        UCombatAttributeSet::GetKnockbackImpulseAttribute());
+    LaunchValue = ASC->GetNumericAttribute(
+        UCombatAttributeSet::GetLaunchImpulseAttribute());
+  }
+
+  // Get trace parameters from GAS attributes (use defaults if no ASC)
+  float TraceDistanceValue = TraceDistance;
+  float TraceRadiusValue = TraceRadius;
+  if (ASC) {
+    TraceDistanceValue = ASC->GetNumericAttribute(
+        UCombatAttributeSet::GetTraceDistanceAttribute());
+    TraceRadiusValue = ASC->GetNumericAttribute(
+        UCombatAttributeSet::GetTraceRadiusAttribute());
+  }
+
+  // Sweep for objects in front of the character to be hit by the attack
+  TArray<FHitResult> OutHits;
+
+  // Start at the actor location, sweep forward (use socket location if
+  // available)
+  FVector TraceStart = AvatarActor->GetActorLocation();
+  if (ACharacter *Character = Cast<ACharacter>(AvatarActor)) {
+    if (Character->GetMesh()) {
+      // Try to get socket location from a default bone (e.g., hand_r or weapon
+      // socket)
+      FVector SocketLocation =
+          Character->GetMesh()->GetSocketLocation(FName("hand_r"));
+      if (!SocketLocation.IsZero()) {
+        TraceStart = SocketLocation;
+      }
+    }
+  }
+  const FVector TraceEnd =
+      TraceStart + (AvatarActor->GetActorForwardVector() * TraceDistanceValue);
+
+  // Check for pawn and world dynamic collision object types
+  FCollisionObjectQueryParams ObjectParams;
+  ObjectParams.AddObjectTypesToQuery(ECC_Pawn);
+  ObjectParams.AddObjectTypesToQuery(ECC_WorldDynamic);
+
+  // Use a sphere shape for the sweep
+  FCollisionShape CollisionShape;
+  CollisionShape.SetSphere(TraceRadiusValue);
+
+  // Ignore self
+  FCollisionQueryParams QueryParams;
+  QueryParams.AddIgnoredActor(AvatarActor);
+
+  bool bHit = GetWorld()->SweepMultiByObjectType(OutHits, TraceStart, TraceEnd,
+                                                 FQuat::Identity, ObjectParams,
+                                                 CollisionShape, QueryParams);
+
+  // Draw debug trace visualization
+  DrawDebugLine(GetWorld(), TraceStart, TraceEnd, FColor::Green, false, 2.0f, 0,
+                2.0f);
+  DrawDebugSphere(GetWorld(), TraceStart, TraceRadiusValue, 12, FColor::Blue,
+                  false, 2.0f);
+  DrawDebugSphere(GetWorld(), TraceEnd, TraceRadiusValue, 12, FColor::Blue,
+                  false, 2.0f);
+
+  // Process all unique hit actors (each actor only once)
+  TSet<AActor *> ProcessedActors;
+  for (const FHitResult &HitResult : OutHits) {
+    AActor *HitActor = HitResult.GetActor();
+    if (HitActor && !ProcessedActors.Contains(HitActor)) {
+      ProcessedActors.Add(HitActor);
+
+      // Draw Debug Hit
+      DrawDebugSphere(GetWorld(), HitResult.ImpactPoint, 10.0f, 12, FColor::Red,
+                      false, 2.0f);
+
+      ICombatDamageable *Damageable = Cast<ICombatDamageable>(HitActor);
+      if (Damageable) {
+        // knock upwards and away from the impact normal
+        const FVector Impulse = (HitResult.ImpactNormal * -KnockbackValue) +
+                                (FVector::UpVector * LaunchValue);
+        Damageable->ApplyDamage(Damage, AvatarActor, HitResult.ImpactPoint,
+                                Impulse);
+      }
+
+      // Call DealtDamage for visual effects on attacker
+      if (ACombatCharacter *CombatChar = Cast<ACombatCharacter>(AvatarActor)) {
+        CombatChar->DealtDamage(Damage, HitResult.ImpactPoint);
+      }
+    }
+  }
+}
