@@ -1,6 +1,6 @@
 // Copyright Nguyen Minh Tam. All Rights Reserved.
 
-#include "Gameplay/CombatAttributeSet.h"
+#include "CombatAttributeSet.h"
 #include "Net/UnrealNetwork.h"
 
 UCombatAttributeSet::UCombatAttributeSet() {

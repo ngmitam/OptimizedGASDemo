@@ -5,7 +5,7 @@
 #include "AbilitySystemGlobals.h"
 #include "GameplayTagsManager.h"
 #include "GameFramework/Character.h"
-#include "CombatAttributeSet.h"
+#include "Gameplay/Attributes/CombatAttributeSet.h"
 
 UHealthComponent::UHealthComponent(const FObjectInitializer &ObjectInitializer)
     : Super(ObjectInitializer) {

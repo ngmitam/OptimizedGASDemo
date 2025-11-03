@@ -10,10 +10,10 @@
 #include "CombatDamageable.h"
 #include "Animation/AnimMontage.h"
 #include "Engine/TimerHandle.h"
-#include "CombatAttributeSet.h"
-#include "CombatPawnData.h"
+#include "Gameplay/Attributes/CombatAttributeSet.h"
+#include "Gameplay/Data/CombatPawnData.h"
 #include "HealthComponent.h"
-#include "../Gameplay/DamageEventData.h"
+#include "Gameplay/Data/DamageEventData.h"
 #include "CombatEnemy.generated.h"
 
 class UWidgetComponent;
@@ -202,6 +202,12 @@ public:
   /** Get charged attack montage */
   UAnimMontage *GetChargedAttackMontage() const { return ChargedAttackMontage; }
 
+  /** Get charge loop section name */
+  FName GetChargeLoopSection() const { return ChargeLoopSection; }
+
+  /** Get charge attack section name */
+  FName GetChargeAttackSection() const { return ChargeAttackSection; }
+
   /** Get pelvis bone name */
   FName GetPelvisBoneName() const { return PelvisBoneName; }
 
@@ -216,6 +222,11 @@ public:
 
   /** Called from a delegate when the attack montage ends */
   void AttackMontageEnded(UAnimMontage *Montage, bool bInterrupted);
+
+  /** Public wrapper for montage end notification */
+  void NotifyAttackMontageEnded(UAnimMontage *Montage, bool bInterrupted) {
+    AttackMontageEnded(Montage, bInterrupted);
+  }
 
   /** Returns the last recorded location we were attacked from */
   const FVector &GetLastDangerLocation() const;

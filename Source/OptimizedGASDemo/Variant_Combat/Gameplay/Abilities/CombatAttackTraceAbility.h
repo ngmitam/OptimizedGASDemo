@@ -43,6 +43,9 @@ protected:
   UPROPERTY(EditDefaultsOnly, Category = "Attack", meta = (ClampMin = 0))
   float TraceRadius = 75.0f;
 
+  /** Cached trigger event data */
+  const FGameplayEventData *CachedTriggerEventData = nullptr;
+
   /** Perform the attack trace */
   void PerformAttackTrace();
 };

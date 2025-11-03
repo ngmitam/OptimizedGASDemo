@@ -10,10 +10,10 @@
 #include "CombatDamageable.h"
 #include "Animation/AnimInstance.h"
 #include "HealthComponent.h"
-#include "CombatAttributeSet.h"
-#include "CombatPawnData.h"
+#include "Gameplay/Attributes/CombatAttributeSet.h"
+#include "Gameplay/Data/CombatPawnData.h"
 #include "EnhancedInputComponent.h"
-#include "Gameplay/DamageEventData.h"
+#include "Gameplay/Data/DamageEventData.h"
 #include "CombatCharacter.generated.h"
 
 class USpringArmComponent;
@@ -231,11 +231,14 @@ public:
   virtual UAbilitySystemComponent *GetAbilitySystemComponent() const override;
   // ~end IAbilitySystemInterface
 
-  /** Get combo attack montage */
-  UAnimMontage *GetComboAttackMontage() const { return ComboAttackMontage; }
-
   /** Get charged attack montage */
   UAnimMontage *GetChargedAttackMontage() const { return ChargedAttackMontage; }
+
+  /** Get charge loop section name */
+  FName GetChargeLoopSection() const { return ChargeLoopSection; }
+
+  /** Get charge attack section name */
+  FName GetChargeAttackSection() const { return ChargeAttackSection; }
 
   /** Get pelvis bone name */
   FName GetPelvisBoneName() const { return PelvisBoneName; }
@@ -302,6 +305,11 @@ protected:
   void AttackMontageEnded(UAnimMontage *Montage, bool bInterrupted);
 
 public:
+  /** Public wrapper for montage end notification */
+  void NotifyAttackMontageEnded(UAnimMontage *Montage, bool bInterrupted) {
+    AttackMontageEnded(Montage, bInterrupted);
+  }
+
   // ~begin CombatAttacker interface
 
   /** Performs the collision check for an attack */

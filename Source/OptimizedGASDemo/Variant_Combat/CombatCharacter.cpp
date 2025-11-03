@@ -6,7 +6,7 @@
 #include "CombatLifeBar.h"
 #include "CombatPlayerController.h"
 #include "CombatPlayerState.h"
-#include "Gameplay/CombatAttributeSet.h"
+#include "Gameplay/Attributes/CombatAttributeSet.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/WidgetComponent.h"
@@ -17,10 +17,12 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "TimerManager.h"
-#include "Gameplay/CombatReceiveDamageAbility.h"
-#include "Gameplay/CombatDeathAbility.h"
-#include "Gameplay/CombatAttackTraceAbility.h"
-#include "Gameplay/CombatDamageGameplayEffect.h"
+#include "Gameplay/Abilities/CombatReceiveDamageAbility.h"
+#include "Gameplay/Abilities/CombatDeathAbility.h"
+#include "Gameplay/Abilities/CombatAttackTraceAbility.h"
+#include "Gameplay/Abilities/CombatChargedAttackAbility.h"
+#include "Gameplay/Effects/CombatDamageGameplayEffect.h"
+#include "Gameplay/Data/AttackEventData.h"
 
 ACombatCharacter::ACombatCharacter() {
   PrimaryActorTick.bCanEverTick = true;
@@ -80,9 +82,7 @@ ACombatCharacter::ACombatCharacter() {
     PawnData->GrantedAbilities.Add(UCombatReceiveDamageAbility::StaticClass());
     PawnData->GrantedAbilities.Add(UCombatDeathAbility::StaticClass());
     PawnData->GrantedAbilities.Add(UCombatAttackTraceAbility::StaticClass());
-
-    // Add granted effects (none for now, but structure is ready)
-    // PawnData->GrantedEffects.Add(SomeEffectClass::StaticClass());
+    PawnData->GrantedAbilities.Add(UCombatChargedAttackAbility::StaticClass());
   }
 
   // set the player tag
@@ -183,7 +183,16 @@ void ACombatCharacter::DoChargedAttackStart() {
     return;
   }
 
-  ChargedAttack();
+  // Activate charged attack ability
+  if (AbilitySystemComponent) {
+    FGameplayTagContainer AbilityTags;
+    AbilityTags.AddTag(
+        FGameplayTag::RequestGameplayTag(FName("Ability.ChargedAttack")));
+    AbilitySystemComponent->TryActivateAbilitiesByTag(AbilityTags);
+  } else {
+    // Fallback to old logic
+    ChargedAttack();
+  }
 }
 
 void ACombatCharacter::DoChargedAttackEnd() {
@@ -193,7 +202,19 @@ void ACombatCharacter::DoChargedAttackEnd() {
   // if we've done the charge loop at least once, release the charged attack
   // right away
   if (bHasLoopedChargedAttack) {
-    CheckChargedAttack();
+    // Send release event
+    if (AbilitySystemComponent) {
+      FGameplayEventData EventData;
+      EventData.Instigator = this;
+      EventData.Target = this;
+
+      AbilitySystemComponent->HandleGameplayEvent(
+          FGameplayTag::RequestGameplayTag(
+              FName("Event.ChargedAttack.Release")),
+          &EventData);
+    } else {
+      CheckChargedAttack();
+    }
   }
 }
 
@@ -284,6 +305,11 @@ void ACombatCharacter::DoAttackTrace(FName DamageSourceBone) {
     EventData.Instigator = this;
     EventData.Target = this;
 
+    // Create attack event data with damage source bone
+    UAttackEventData *AttackData = NewObject<UAttackEventData>(this);
+    AttackData->DamageSourceBone = DamageSourceBone;
+    EventData.OptionalObject = AttackData;
+
     AbilitySystemComponent->HandleGameplayEvent(
         FGameplayTag::RequestGameplayTag(FName("Event.Attack.Start")),
         &EventData);
@@ -318,15 +344,36 @@ void ACombatCharacter::CheckCombo() {
 }
 
 void ACombatCharacter::CheckChargedAttack() {
-  // raise the looped charged attack flag
-  bHasLoopedChargedAttack = true;
+  // Send gameplay event for charged attack check
+  if (AbilitySystemComponent) {
+    FGameplayEventData EventData;
+    EventData.Instigator = this;
+    EventData.Target = this;
 
-  // jump to either the loop or the attack section depending on whether we're
-  // still holding the charge button
-  if (UAnimInstance *AnimInstance = GetMesh()->GetAnimInstance()) {
-    AnimInstance->Montage_JumpToSection(bIsChargingAttack ? ChargeLoopSection
-                                                          : ChargeAttackSection,
-                                        ChargedAttackMontage);
+    if (bIsChargingAttack) {
+      // Still charging, loop
+      AbilitySystemComponent->HandleGameplayEvent(
+          FGameplayTag::RequestGameplayTag(FName("Event.ChargedAttack.Loop")),
+          &EventData);
+    } else {
+      // Release attack
+      AbilitySystemComponent->HandleGameplayEvent(
+          FGameplayTag::RequestGameplayTag(
+              FName("Event.ChargedAttack.Release")),
+          &EventData);
+    }
+  } else {
+    // Fallback to old logic
+    // raise the looped charged attack flag
+    bHasLoopedChargedAttack = true;
+
+    // jump to either the loop or the attack section depending on whether we're
+    // still holding the charge button
+    if (UAnimInstance *AnimInstance = GetMesh()->GetAnimInstance()) {
+      AnimInstance->Montage_JumpToSection(
+          bIsChargingAttack ? ChargeLoopSection : ChargeAttackSection,
+          ChargedAttackMontage);
+    }
   }
 }
 

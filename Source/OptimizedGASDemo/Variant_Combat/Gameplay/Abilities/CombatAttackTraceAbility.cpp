@@ -7,8 +7,9 @@
 #include "AbilitySystemGlobals.h"
 #include "GameplayTagsManager.h"
 #include "Kismet/KismetSystemLibrary.h"
-#include "CombatGameplayEffect.h"
-#include "CombatAttributeSet.h"
+#include "../Effects/CombatGameplayEffect.h"
+#include "../Attributes/CombatAttributeSet.h"
+#include "../Data/AttackEventData.h"
 
 UCombatAttackTraceAbility::UCombatAttackTraceAbility() {
   InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
@@ -47,6 +48,9 @@ void UCombatAttackTraceAbility::ActivateAbility(
     EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
     return;
   }
+
+  // Store trigger event data for use in PerformAttackTrace
+  CachedTriggerEventData = TriggerEventData;
 
   // Perform attack trace immediately
   PerformAttackTrace();
@@ -96,12 +100,21 @@ void UCombatAttackTraceAbility::PerformAttackTrace() {
   // Start at the actor location, sweep forward (use socket location if
   // available)
   FVector TraceStart = AvatarActor->GetActorLocation();
+
+  // Get damage source bone from event data if available
+  FName DamageSourceBone = FName("hand_r"); // default
+  if (CachedTriggerEventData && CachedTriggerEventData->OptionalObject) {
+    if (const UAttackEventData *AttackData =
+            Cast<UAttackEventData>(CachedTriggerEventData->OptionalObject)) {
+      DamageSourceBone = AttackData->DamageSourceBone;
+    }
+  }
+
   if (ACharacter *Character = Cast<ACharacter>(AvatarActor)) {
     if (Character->GetMesh()) {
-      // Try to get socket location from a default bone (e.g., hand_r or weapon
-      // socket)
+      // Try to get socket location from the damage source bone
       FVector SocketLocation =
-          Character->GetMesh()->GetSocketLocation(FName("hand_r"));
+          Character->GetMesh()->GetSocketLocation(DamageSourceBone);
       if (!SocketLocation.IsZero()) {
         TraceStart = SocketLocation;
       }

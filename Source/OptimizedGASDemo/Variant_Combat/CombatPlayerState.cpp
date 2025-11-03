@@ -2,7 +2,7 @@
 
 #include "CombatPlayerState.h"
 #include "AbilitySystemComponent.h"
-#include "Gameplay/CombatAttributeSet.h"
+#include "Gameplay/Attributes/CombatAttributeSet.h"
 
 ACombatPlayerState::ACombatPlayerState() {
   AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(

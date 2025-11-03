@@ -11,12 +11,14 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Animation/AnimInstance.h"
 #include "AbilitySystemComponent.h"
-#include "CombatAttributeSet.h"
+#include "Gameplay/Attributes/CombatAttributeSet.h"
 #include "GameplayTagsManager.h"
-#include "Gameplay/CombatReceiveDamageAbility.h"
-#include "Gameplay/CombatDeathAbility.h"
-#include "Gameplay/CombatAttackTraceAbility.h"
-#include "Gameplay/CombatDamageGameplayEffect.h"
+#include "Gameplay/Abilities/CombatReceiveDamageAbility.h"
+#include "Gameplay/Abilities/CombatDeathAbility.h"
+#include "Gameplay/Abilities/CombatAttackTraceAbility.h"
+#include "Gameplay/Abilities/CombatChargedAttackAbility.h"
+#include "Gameplay/Effects/CombatDamageGameplayEffect.h"
+#include "Gameplay/Data/AttackEventData.h"
 
 ACombatEnemy::ACombatEnemy() {
   PrimaryActorTick.bCanEverTick = true;
@@ -67,6 +69,7 @@ ACombatEnemy::ACombatEnemy() {
     PawnData->GrantedAbilities.Add(UCombatReceiveDamageAbility::StaticClass());
     PawnData->GrantedAbilities.Add(UCombatDeathAbility::StaticClass());
     PawnData->GrantedAbilities.Add(UCombatAttackTraceAbility::StaticClass());
+    PawnData->GrantedAbilities.Add(UCombatChargedAttackAbility::StaticClass());
   }
 
   // set the collision capsule size
@@ -93,7 +96,11 @@ void ACombatEnemy::DoAIComboAttack() {
   bIsAttacking = true;
 
   // choose how many times we're going to attack
-  TargetComboCount = FMath::RandRange(1, ComboSectionNames.Num() - 1);
+  if (ComboSectionNames.Num() > 0) {
+    TargetComboCount = FMath::RandRange(1, ComboSectionNames.Num());
+  } else {
+    TargetComboCount = 0;
+  }
 
   // reset the attack counter
   CurrentComboAttack = 0;
@@ -128,17 +135,26 @@ void ACombatEnemy::DoAIChargedAttack() {
   // reset the charge loop counter
   CurrentChargeLoop = 0;
 
-  // play the attack montage
-  if (UAnimInstance *AnimInstance = GetMesh()->GetAnimInstance()) {
-    const float MontageLength = AnimInstance->Montage_Play(
-        ChargedAttackMontage, 1.0f, EMontagePlayReturnType::MontageLength, 0.0f,
-        true);
+  // Activate charged attack ability
+  if (AbilitySystemComponent) {
+    FGameplayTagContainer AbilityTags;
+    AbilityTags.AddTag(
+        FGameplayTag::RequestGameplayTag(FName("Ability.ChargedAttack")));
+    AbilitySystemComponent->TryActivateAbilitiesByTag(AbilityTags);
+  } else {
+    // Fallback to old logic
+    // play the attack montage
+    if (UAnimInstance *AnimInstance = GetMesh()->GetAnimInstance()) {
+      const float MontageLength = AnimInstance->Montage_Play(
+          ChargedAttackMontage, 1.0f, EMontagePlayReturnType::MontageLength,
+          0.0f, true);
 
-    // subscribe to montage completed and interrupted events
-    if (MontageLength > 0.0f) {
-      // set the end delegate for the montage
-      AnimInstance->Montage_SetEndDelegate(OnAttackMontageEnded,
-                                           ChargedAttackMontage);
+      // subscribe to montage completed and interrupted events
+      if (MontageLength > 0.0f) {
+        // set the end delegate for the montage
+        AnimInstance->Montage_SetEndDelegate(OnAttackMontageEnded,
+                                             ChargedAttackMontage);
+      }
     }
   }
 }
@@ -165,6 +181,11 @@ void ACombatEnemy::DoAttackTrace(FName DamageSourceBone) {
     EventData.Instigator = this;
     EventData.Target = this;
 
+    // Create attack event data with damage source bone
+    UAttackEventData *AttackData = NewObject<UAttackEventData>(this);
+    AttackData->DamageSourceBone = DamageSourceBone;
+    EventData.OptionalObject = AttackData;
+
     AbilitySystemComponent->HandleGameplayEvent(
         FGameplayTag::RequestGameplayTag(FName("Event.Attack.Start")),
         &EventData);
@@ -176,7 +197,7 @@ void ACombatEnemy::CheckCombo() {
   ++CurrentComboAttack;
 
   // do we still have attacks to play in this string?
-  if (CurrentComboAttack < TargetComboCount) {
+  if (CurrentComboAttack <= TargetComboCount) {
     // jump to the next attack section
     if (UAnimInstance *AnimInstance = GetMesh()->GetAnimInstance()) {
       AnimInstance->Montage_JumpToSection(ComboSectionNames[CurrentComboAttack],
@@ -186,16 +207,28 @@ void ACombatEnemy::CheckCombo() {
 }
 
 void ACombatEnemy::CheckChargedAttack() {
-  // increase the charge loop counter
-  ++CurrentChargeLoop;
+  // Send gameplay event for charged attack check
+  if (AbilitySystemComponent) {
+    FGameplayEventData EventData;
+    EventData.Instigator = this;
+    EventData.Target = this;
 
-  // jump to either the loop or attack section of the montage depending on
-  // whether we hit the loop target
-  if (UAnimInstance *AnimInstance = GetMesh()->GetAnimInstance()) {
-    AnimInstance->Montage_JumpToSection(CurrentChargeLoop >= TargetChargeLoops
-                                            ? ChargeAttackSection
-                                            : ChargeLoopSection,
-                                        ChargedAttackMontage);
+    AbilitySystemComponent->HandleGameplayEvent(
+        FGameplayTag::RequestGameplayTag(FName("Event.ChargedAttack.Loop")),
+        &EventData);
+  } else {
+    // Fallback to old logic
+    // increase the charge loop counter
+    ++CurrentChargeLoop;
+
+    // jump to either the loop or attack section of the montage depending on
+    // whether we hit the loop target
+    if (UAnimInstance *AnimInstance = GetMesh()->GetAnimInstance()) {
+      AnimInstance->Montage_JumpToSection(CurrentChargeLoop >= TargetChargeLoops
+                                              ? ChargeAttackSection
+                                              : ChargeLoopSection,
+                                          ChargedAttackMontage);
+    }
   }
 }
 
