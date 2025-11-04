@@ -5,12 +5,12 @@
 #include "AI/CombatEnemy.h"
 #include "Interfaces/CombatDamageable.h"
 #include "AbilitySystemComponent.h"
-#include "../Attributes/CombatAttributeSet.h"
+#include "Gameplay/Attributes/CombatAttributeSet.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Camera/CameraShakeBase.h"
 #include "Kismet/GameplayStatics.h"
-#include "../Effects/CombatDamageGameplayEffect.h"
+#include "Gameplay/Effects/CombatDamageGameplayEffect.h"
 
 UCombatReceiveDamageAbility::UCombatReceiveDamageAbility() {
   InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
@@ -23,7 +23,7 @@ UCombatReceiveDamageAbility::UCombatReceiveDamageAbility() {
   // Ability tags
   FGameplayTagContainer AssetTags;
   AssetTags.AddTag(
-      FGameplayTag::RequestGameplayTag(FName("Ability.Damage.Receive")));
+      FGameplayTag::RequestGameplayTag(FName("Ability.Type.Damage.Receive")));
   SetAssetTags(AssetTags);
 
   // Block attack abilities while receiving damage
@@ -36,6 +36,9 @@ UCombatReceiveDamageAbility::UCombatReceiveDamageAbility() {
       FGameplayTag::RequestGameplayTag(FName("Event.Damage.Received"));
   TriggerData.TriggerSource = EGameplayAbilityTriggerSource::GameplayEvent;
   AbilityTriggers.Add(TriggerData);
+
+  // Set default damage gameplay effect
+  DamageGameplayEffect = UCombatDamageGameplayEffect::StaticClass();
 }
 
 void UCombatReceiveDamageAbility::ActivateAbility(
@@ -78,10 +81,10 @@ void UCombatReceiveDamageAbility::ActivateAbility(
                   3.0f);
 
   // Apply damage via Gameplay Effect
-  if (ActorInfo->AbilitySystemComponent.IsValid()) {
+  if (ActorInfo->AbilitySystemComponent.IsValid() && DamageGameplayEffect) {
     FGameplayEffectSpecHandle DamageSpecHandle =
         ActorInfo->AbilitySystemComponent->MakeOutgoingSpec(
-            UCombatDamageGameplayEffect::StaticClass(), 1.0f,
+            DamageGameplayEffect, 1.0f,
             ActorInfo->AbilitySystemComponent->MakeEffectContext());
     if (DamageSpecHandle.IsValid()) {
       DamageSpecHandle.Data.Get()->SetSetByCallerMagnitude(
@@ -127,10 +130,8 @@ void UCombatReceiveDamageAbility::ActivateAbility(
     // Call ReceivedDamage for visual effects on character
     if (ActorInfo->AvatarActor.IsValid()) {
       // Check if actor is CombatCharacter or CombatEnemy
-      ACombatCharacter *CombatChar =
-          Cast<ACombatCharacter>(ActorInfo->AvatarActor.Get());
-      ACombatEnemy *CombatEnemy =
-          Cast<ACombatEnemy>(ActorInfo->AvatarActor.Get());
+      ACombatCharacter *CombatChar = GetCombatCharacterFromActorInfo();
+      ACombatEnemy *CombatEnemy = GetCombatEnemyFromActorInfo();
       if (CombatChar) {
         CombatChar->ReceivedDamage(Damage, ImpactPoint, DamageDirection);
       } else if (CombatEnemy) {

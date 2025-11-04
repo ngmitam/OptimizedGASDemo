@@ -1,7 +1,7 @@
 // Copyright Nguyen Minh Tam. All Rights Reserved.
 
 #include "CombatDamageGameplayEffect.h"
-#include "../Attributes/CombatAttributeSet.h"
+#include "Gameplay/Attributes/CombatAttributeSet.h"
 #include "GameplayTagsManager.h"
 #include "GameplayEffect.h"
 

@@ -1,6 +1,7 @@
 // Copyright Nguyen Minh Tam. All Rights Reserved.
 
 #include "CombatEnemy.h"
+#include "CombatCharacter.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "CombatAIController.h"
@@ -15,8 +16,10 @@
 #include "GameplayTagsManager.h"
 #include "Gameplay/Abilities/CombatReceiveDamageAbility.h"
 #include "Gameplay/Abilities/CombatDeathAbility.h"
-#include "Gameplay/Abilities/CombatAttackTraceAbility.h"
+#include "Gameplay/Abilities/CombatTraceAttackAbility.h"
 #include "Gameplay/Abilities/CombatChargedAttackAbility.h"
+#include "Gameplay/Abilities/CombatComboAttackAbility.h"
+#include "Gameplay/Abilities/CombatNotifyEnemiesAbility.h"
 #include "Gameplay/Effects/CombatDamageGameplayEffect.h"
 #include "Gameplay/Data/AttackEventData.h"
 
@@ -68,8 +71,10 @@ ACombatEnemy::ACombatEnemy() {
     // Add granted abilities
     PawnData->GrantedAbilities.Add(UCombatReceiveDamageAbility::StaticClass());
     PawnData->GrantedAbilities.Add(UCombatDeathAbility::StaticClass());
-    PawnData->GrantedAbilities.Add(UCombatAttackTraceAbility::StaticClass());
+    PawnData->GrantedAbilities.Add(UCombatTraceAttackAbility::StaticClass());
     PawnData->GrantedAbilities.Add(UCombatChargedAttackAbility::StaticClass());
+    PawnData->GrantedAbilities.Add(UCombatComboAttackAbility::StaticClass());
+    PawnData->GrantedAbilities.Add(UCombatNotifyEnemiesAbility::StaticClass());
   }
 
   // set the collision capsule size
@@ -92,31 +97,12 @@ void ACombatEnemy::DoAIComboAttack() {
     return;
   }
 
-  // raise the attacking flag
-  bIsAttacking = true;
-
-  // choose how many times we're going to attack
-  if (ComboSectionNames.Num() > 0) {
-    TargetComboCount = FMath::RandRange(1, ComboSectionNames.Num());
-  } else {
-    TargetComboCount = 0;
-  }
-
-  // reset the attack counter
-  CurrentComboAttack = 0;
-
-  // play the attack montage
-  if (UAnimInstance *AnimInstance = GetMesh()->GetAnimInstance()) {
-    const float MontageLength = AnimInstance->Montage_Play(
-        ComboAttackMontage, 1.0f, EMontagePlayReturnType::MontageLength, 0.0f,
-        true);
-
-    // subscribe to montage completed and interrupted events
-    if (MontageLength > 0.0f) {
-      // set the end delegate for the montage
-      AnimInstance->Montage_SetEndDelegate(OnAttackMontageEnded,
-                                           ComboAttackMontage);
-    }
+  // Activate combo attack ability
+  if (AbilitySystemComponent) {
+    FGameplayTagContainer AbilityTags;
+    AbilityTags.AddTag(
+        FGameplayTag::RequestGameplayTag(FName("Ability.Type.Attack.Combo")));
+    AbilitySystemComponent->TryActivateAbilitiesByTag(AbilityTags);
   }
 }
 
@@ -126,36 +112,12 @@ void ACombatEnemy::DoAIChargedAttack() {
     return;
   }
 
-  // raise the attacking flag
-  bIsAttacking = true;
-
-  // choose how many loops are we going to charge for
-  TargetChargeLoops = FMath::RandRange(MinChargeLoops, MaxChargeLoops);
-
-  // reset the charge loop counter
-  CurrentChargeLoop = 0;
-
   // Activate charged attack ability
   if (AbilitySystemComponent) {
     FGameplayTagContainer AbilityTags;
     AbilityTags.AddTag(
-        FGameplayTag::RequestGameplayTag(FName("Ability.ChargedAttack")));
+        FGameplayTag::RequestGameplayTag(FName("Ability.Type.Attack.Charged")));
     AbilitySystemComponent->TryActivateAbilitiesByTag(AbilityTags);
-  } else {
-    // Fallback to old logic
-    // play the attack montage
-    if (UAnimInstance *AnimInstance = GetMesh()->GetAnimInstance()) {
-      const float MontageLength = AnimInstance->Montage_Play(
-          ChargedAttackMontage, 1.0f, EMontagePlayReturnType::MontageLength,
-          0.0f, true);
-
-      // subscribe to montage completed and interrupted events
-      if (MontageLength > 0.0f) {
-        // set the end delegate for the montage
-        AnimInstance->Montage_SetEndDelegate(OnAttackMontageEnded,
-                                             ChargedAttackMontage);
-      }
-    }
   }
 }
 
@@ -187,22 +149,21 @@ void ACombatEnemy::DoAttackTrace(FName DamageSourceBone) {
     EventData.OptionalObject = AttackData;
 
     AbilitySystemComponent->HandleGameplayEvent(
-        FGameplayTag::RequestGameplayTag(FName("Event.Attack.Start")),
+        FGameplayTag::RequestGameplayTag(FName("Event.Attack.Trace")),
         &EventData);
   }
 }
 
 void ACombatEnemy::CheckCombo() {
-  // increase the combo counter
-  ++CurrentComboAttack;
+  // Send gameplay event to advance combo
+  if (AbilitySystemComponent) {
+    FGameplayEventData EventData;
+    EventData.Instigator = this;
+    EventData.Target = this;
 
-  // do we still have attacks to play in this string?
-  if (CurrentComboAttack <= TargetComboCount) {
-    // jump to the next attack section
-    if (UAnimInstance *AnimInstance = GetMesh()->GetAnimInstance()) {
-      AnimInstance->Montage_JumpToSection(ComboSectionNames[CurrentComboAttack],
-                                          ComboAttackMontage);
-    }
+    AbilitySystemComponent->HandleGameplayEvent(
+        FGameplayTag::RequestGameplayTag(FName("Event.Attack.Combo.Next")),
+        &EventData);
   }
 }
 
@@ -214,21 +175,8 @@ void ACombatEnemy::CheckChargedAttack() {
     EventData.Target = this;
 
     AbilitySystemComponent->HandleGameplayEvent(
-        FGameplayTag::RequestGameplayTag(FName("Event.ChargedAttack.Loop")),
+        FGameplayTag::RequestGameplayTag(FName("Event.Attack.Charged.Loop")),
         &EventData);
-  } else {
-    // Fallback to old logic
-    // increase the charge loop counter
-    ++CurrentChargeLoop;
-
-    // jump to either the loop or attack section of the montage depending on
-    // whether we hit the loop target
-    if (UAnimInstance *AnimInstance = GetMesh()->GetAnimInstance()) {
-      AnimInstance->Montage_JumpToSection(CurrentChargeLoop >= TargetChargeLoops
-                                              ? ChargeAttackSection
-                                              : ChargeLoopSection,
-                                          ChargedAttackMontage);
-    }
   }
 }
 
@@ -250,9 +198,6 @@ void ACombatEnemy::ApplyDamage(float Damage, AActor *DamageCauser,
     AbilitySystemComponent->HandleGameplayEvent(
         FGameplayTag::RequestGameplayTag(FName("Event.Damage.Received")),
         &EventData);
-  } else {
-    // Fallback for objects without ASC: call ReceivedDamage for effects
-    ReceivedDamage(Damage, DamageLocation, -DamageImpulse.GetSafeNormal());
   }
 }
 
@@ -261,18 +206,8 @@ void ACombatEnemy::HandleDeath() {
   if (AbilitySystemComponent) {
     FGameplayTagContainer AbilityTags;
     AbilityTags.AddTag(
-        FGameplayTag::RequestGameplayTag(FName("Ability.Death")));
+        FGameplayTag::RequestGameplayTag(FName("Ability.Type.Death")));
     AbilitySystemComponent->TryActivateAbilitiesByTag(AbilityTags);
-  } else {
-    // disable the collision capsule to avoid being hit again while dead
-    GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-
-    // disable character movement
-    GetCharacterMovement()->DisableMovement();
-
-    // set up the death timer
-    GetWorld()->GetTimerManager().SetTimer(
-        DeathTimer, this, &ACombatEnemy::RemoveFromLevel, DeathRemovalTime);
   }
 
   // hide the life bar

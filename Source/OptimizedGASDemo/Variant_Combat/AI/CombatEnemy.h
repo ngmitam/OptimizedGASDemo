@@ -199,6 +199,11 @@ public:
   /** Get combo attack montage */
   UAnimMontage *GetComboAttackMontage() const { return ComboAttackMontage; }
 
+  /** Get combo section names */
+  const TArray<FName> &GetComboSectionNames() const {
+    return ComboSectionNames;
+  }
+
   /** Get charged attack montage */
   UAnimMontage *GetChargedAttackMontage() const { return ChargedAttackMontage; }
 
@@ -211,6 +216,9 @@ public:
   /** Get pelvis bone name */
   FName GetPelvisBoneName() const { return PelvisBoneName; }
 
+  /** Set attacking flag */
+  void SetIsAttacking(bool bAttacking) { bIsAttacking = bAttacking; }
+
 public:
   /** Performs an AI-initiated combo attack. Number of hits will be decided by
    * this character */
@@ -222,11 +230,6 @@ public:
 
   /** Called from a delegate when the attack montage ends */
   void AttackMontageEnded(UAnimMontage *Montage, bool bInterrupted);
-
-  /** Public wrapper for montage end notification */
-  void NotifyAttackMontageEnded(UAnimMontage *Montage, bool bInterrupted) {
-    AttackMontageEnded(Montage, bInterrupted);
-  }
 
   /** Returns the last recorded location we were attacked from */
   const FVector &GetLastDangerLocation() const;

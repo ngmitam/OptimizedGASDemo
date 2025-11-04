@@ -1,43 +1,39 @@
 // Copyright Nguyen Minh Tam. All Rights Reserved.
 
-#include "CombatAttackTraceAbility.h"
+#include "CombatTraceAttackAbility.h"
 #include "CombatCharacter.h"
 #include "AI/CombatEnemy.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
 #include "GameplayTagsManager.h"
 #include "Kismet/KismetSystemLibrary.h"
-#include "../Effects/CombatGameplayEffect.h"
-#include "../Attributes/CombatAttributeSet.h"
-#include "../Data/AttackEventData.h"
+#include "Gameplay/Effects/CombatDamageGameplayEffect.h"
+#include "Gameplay/Attributes/CombatAttributeSet.h"
+#include "Gameplay/Data/AttackEventData.h"
 
-UCombatAttackTraceAbility::UCombatAttackTraceAbility() {
+UCombatTraceAttackAbility::UCombatTraceAttackAbility() {
   InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
   NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
 
   // Set ability tags
   FGameplayTagContainer AssetTags;
   AssetTags.AddTag(
-      FGameplayTag::RequestGameplayTag(FName("Ability.Attack.Trace")));
+      FGameplayTag::RequestGameplayTag(FName("Ability.Type.Trace.Attack")));
   SetAssetTags(AssetTags);
-
-  // Block other attack abilities while this is active
-  BlockAbilitiesWithTag.AddTag(
-      FGameplayTag::RequestGameplayTag(FName("Ability.Attack")));
 
   // Cancel this ability if death occurs
   CancelAbilitiesWithTag.AddTag(
-      FGameplayTag::RequestGameplayTag(FName("Ability.Death")));
+      FGameplayTag::RequestGameplayTag(FName("Ability.Type.Death")));
 
   // Add trigger to activate on attack start event
   FAbilityTriggerData TriggerData;
   TriggerData.TriggerTag =
-      FGameplayTag::RequestGameplayTag(FName("Event.Attack.Start"));
+      FGameplayTag::RequestGameplayTag(FName("Event.Attack.Trace"));
   TriggerData.TriggerSource = EGameplayAbilityTriggerSource::GameplayEvent;
   AbilityTriggers.Add(TriggerData);
 }
 
-void UCombatAttackTraceAbility::ActivateAbility(
+void UCombatTraceAttackAbility::ActivateAbility(
     const FGameplayAbilitySpecHandle Handle,
     const FGameplayAbilityActorInfo *ActorInfo,
     const FGameplayAbilityActivationInfo ActivationInfo,
@@ -59,7 +55,7 @@ void UCombatAttackTraceAbility::ActivateAbility(
   EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
 }
 
-void UCombatAttackTraceAbility::PerformAttackTrace() {
+void UCombatTraceAttackAbility::PerformAttackTrace() {
   if (!CurrentActorInfo->AvatarActor.IsValid()) {
     return;
   }
@@ -161,6 +157,9 @@ void UCombatAttackTraceAbility::PerformAttackTrace() {
 
       ICombatDamageable *Damageable = Cast<ICombatDamageable>(HitActor);
       if (Damageable) {
+        // Notify danger to the hit actor
+        Damageable->NotifyDanger(HitResult.ImpactPoint, AvatarActor);
+
         // knock upwards and away from the impact normal
         const FVector Impulse = (HitResult.ImpactNormal * -KnockbackValue) +
                                 (FVector::UpVector * LaunchValue);

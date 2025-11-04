@@ -23,8 +23,6 @@ struct FInputActionValue;
 class UCombatLifeBar;
 class UWidgetComponent;
 
-DECLARE_LOG_CATEGORY_EXTERN(LogCombatCharacter, Log, All);
-
 /**
  *  An enhanced Third Person Character with melee combat capabilities:
  *  - Combo attack string
@@ -122,10 +120,13 @@ protected:
    * considered stale */
   UPROPERTY(EditAnywhere, Category = "Melee Attack",
             meta = (ClampMin = 0, ClampMax = 5, Units = "s"))
-  float AttackInputCacheTimeTolerance = 1.0f;
+  float AttackInputCacheTimeTolerance = 2.0f;
 
-  /** Time at which an attack button was last pressed */
-  float CachedAttackInputTime = 0.0f;
+  /** Time at which a combo attack button was last pressed */
+  float CachedComboAttackInputTime = 0.0f;
+
+  /** Time at which a charged attack button was last pressed */
+  float CachedChargedAttackInputTime = 0.0f;
 
   /** If true, the character is currently playing an attack animation */
   bool bIsAttacking = false;
@@ -231,6 +232,14 @@ public:
   virtual UAbilitySystemComponent *GetAbilitySystemComponent() const override;
   // ~end IAbilitySystemInterface
 
+  /** Get combo attack montage */
+  UAnimMontage *GetComboAttackMontage() const { return ComboAttackMontage; }
+
+  /** Get combo section names */
+  const TArray<FName> &GetComboSectionNames() const {
+    return ComboSectionNames;
+  }
+
   /** Get charged attack montage */
   UAnimMontage *GetChargedAttackMontage() const { return ChargedAttackMontage; }
 
@@ -242,6 +251,40 @@ public:
 
   /** Get pelvis bone name */
   FName GetPelvisBoneName() const { return PelvisBoneName; }
+
+  /** Set attacking flag */
+  void SetIsAttacking(bool bAttacking) { bIsAttacking = bAttacking; }
+
+  /** Get cached combo attack input time */
+  float GetCachedComboAttackInputTime() const {
+    return CachedComboAttackInputTime;
+  }
+
+  /** Set cached combo attack input time */
+  void SetCachedComboAttackInputTime(float Time) {
+    CachedComboAttackInputTime = Time;
+  }
+
+  /** Get cached charged attack input time */
+  float GetCachedChargedAttackInputTime() const {
+    return CachedChargedAttackInputTime;
+  }
+
+  /** Set cached charged attack input time */
+  void SetCachedChargedAttackInputTime(float Time) {
+    CachedChargedAttackInputTime = Time;
+  }
+
+  /** Get combo input cache time tolerance */
+  float GetComboInputCacheTimeTolerance() const {
+    return ComboInputCacheTimeTolerance;
+  }
+
+  /** Get danger trace distance */
+  float GetDangerTraceDistance() const { return DangerTraceDistance; }
+
+  /** Get danger trace radius */
+  float GetDangerTraceRadius() const { return DangerTraceRadius; }
 
 protected:
   /** Called for movement input */
@@ -295,21 +338,6 @@ protected:
   /** Resets the character's current HP to maximum */
   void ResetHP();
 
-  /** Performs a combo attack */
-  void ComboAttack();
-
-  /** Performs a charged attack */
-  void ChargedAttack();
-
-  /** Called from a delegate when the attack montage ends */
-  void AttackMontageEnded(UAnimMontage *Montage, bool bInterrupted);
-
-public:
-  /** Public wrapper for montage end notification */
-  void NotifyAttackMontageEnded(UAnimMontage *Montage, bool bInterrupted) {
-    AttackMontageEnded(Montage, bInterrupted);
-  }
-
   // ~begin CombatAttacker interface
 
   /** Performs the collision check for an attack */
@@ -345,10 +373,13 @@ public:
 
   // ~end CombatDamageable interface
 
+public:
+  /** Called from a delegate when the attack montage ends */
+  void AttackMontageEnded(UAnimMontage *Montage, bool bInterrupted);
+
   /** Called from the respawn timer to destroy and re-create the character */
   void RespawnCharacter();
 
-public:
   /** Overrides landing to reset damage ragdoll physics */
   virtual void Landed(const FHitResult &Hit) override;
 

@@ -34,6 +34,9 @@ public:
   /** Handle charged attack release event */
   void HandleChargedAttackRelease(const FGameplayEventData *EventData);
 
+  /** Called when montage ends */
+  void OnMontageEnded(UAnimMontage *Montage, bool bInterrupted);
+
 protected:
   /** Montage to play for charged attack */
   UPROPERTY(EditDefaultsOnly, Category = "Charged Attack")
@@ -63,6 +66,9 @@ protected:
   /** Target charge loops (for AI) */
   int32 TargetChargeLoops = 0;
 
-  /** Whether this is player controlled */
-  bool bIsPlayerControlled = false;
+  /** Montage ended delegate */
+  FOnMontageEnded MontageEndedDelegate;
+
+  /** Whether this ability is controlled by player or AI */
+  bool bIsPlayerControlled;
 };

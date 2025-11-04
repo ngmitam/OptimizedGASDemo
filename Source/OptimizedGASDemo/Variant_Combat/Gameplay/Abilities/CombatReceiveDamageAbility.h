@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "CombatGameplayAbility.h"
-#include "../Data/DamageEventData.h"
+#include "Gameplay/Data/DamageEventData.h"
 #include "CombatReceiveDamageAbility.generated.h"
 
 /**
@@ -24,6 +24,10 @@ public:
                   const FGameplayEventData *TriggerEventData) override;
 
 protected:
+  /** Damage gameplay effect to apply */
+  UPROPERTY(EditDefaultsOnly, Category = "Damage")
+  TSubclassOf<UGameplayEffect> DamageGameplayEffect;
+
   /** Camera shake for damage */
   UPROPERTY(EditDefaultsOnly, Category = "Damage")
   TSubclassOf<UCameraShakeBase> DamageCameraShake;

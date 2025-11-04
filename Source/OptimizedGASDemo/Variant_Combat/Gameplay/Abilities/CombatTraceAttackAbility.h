@@ -4,17 +4,17 @@
 
 #include "CoreMinimal.h"
 #include "CombatGameplayAbility.h"
-#include "CombatAttackTraceAbility.generated.h"
+#include "CombatTraceAttackAbility.generated.h"
 
 /**
  * GameplayAbility for performing attack traces
  */
 UCLASS()
-class UCombatAttackTraceAbility : public UCombatGameplayAbility {
+class UCombatTraceAttackAbility : public UCombatGameplayAbility {
   GENERATED_BODY()
 
 public:
-  UCombatAttackTraceAbility();
+  UCombatTraceAttackAbility();
 
   virtual void
   ActivateAbility(const FGameplayAbilitySpecHandle Handle,

@@ -14,7 +14,8 @@ UCombatDeathAbility::UCombatDeathAbility() {
 
   // Set ability tags
   FGameplayTagContainer AssetTags;
-  AssetTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Death")));
+  AssetTags.AddTag(
+      FGameplayTag::RequestGameplayTag(FName("Ability.Type.Death")));
   SetAssetTags(AssetTags);
 
   // Block all abilities while dead
@@ -59,10 +60,8 @@ void UCombatDeathAbility::ActivateAbility(
 
 void UCombatDeathAbility::OnDeathTimerExpired() {
   if (CurrentActorInfo->AvatarActor.IsValid()) {
-    ACombatCharacter *CombatCharacter =
-        Cast<ACombatCharacter>(CurrentActorInfo->AvatarActor.Get());
-    ACombatEnemy *CombatEnemy =
-        Cast<ACombatEnemy>(CurrentActorInfo->AvatarActor.Get());
+    ACombatCharacter *CombatCharacter = GetCombatCharacterFromActorInfo();
+    ACombatEnemy *CombatEnemy = GetCombatEnemyFromActorInfo();
 
     if (CombatCharacter && bShouldRespawn) {
       // Respawn character
