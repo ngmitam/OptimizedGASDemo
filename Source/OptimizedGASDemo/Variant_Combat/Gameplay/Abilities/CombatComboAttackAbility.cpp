@@ -2,8 +2,7 @@
 
 #include "CombatComboAttackAbility.h"
 #include "AbilitySystemComponent.h"
-#include "CombatCharacter.h"
-#include "AI/CombatEnemy.h"
+#include "CombatBase.h"
 #include "Animation/AnimInstance.h"
 #include "GameplayTagsManager.h"
 
@@ -24,6 +23,13 @@ UCombatComboAttackAbility::UCombatComboAttackAbility() {
   // Cancel this ability if death occurs
   CancelAbilitiesWithTag.AddTag(
       FGameplayTag::RequestGameplayTag(FName("Ability.Type.Death")));
+
+  // Add trigger to activate on combo start event
+  FAbilityTriggerData StartTriggerData;
+  StartTriggerData.TriggerTag =
+      FGameplayTag::RequestGameplayTag(FName("Event.Attack.Combo.Start"));
+  StartTriggerData.TriggerSource = EGameplayAbilityTriggerSource::GameplayEvent;
+  AbilityTriggers.Add(StartTriggerData);
 }
 
 void UCombatComboAttackAbility::ActivateAbility(
@@ -36,38 +42,27 @@ void UCombatComboAttackAbility::ActivateAbility(
     return;
   }
 
-  // Get montage and sections from character/enemy
-  ACombatCharacter *CombatChar = GetCombatCharacterFromActorInfo();
-  ACombatEnemy *CombatEnemy = GetCombatEnemyFromActorInfo();
+  // Get montage and sections from CombatBase
+  ACombatBase *CombatBase = GetCombatBaseFromActorInfo();
 
-  if (CombatChar) {
-    ComboAttackMontage = CombatChar->GetComboAttackMontage();
-    ComboSectionNames = CombatChar->GetComboSectionNames();
-    TargetComboCount = ComboSectionNames.Num();
-    // Set attacking flag
-    CombatChar->SetIsAttacking(true);
-    // Notify enemies of attack via ability
-    if (UAbilitySystemComponent *ASC =
-            GetAbilitySystemComponentFromActorInfo()) {
-      FGameplayEventData EventData;
-      EventData.Instigator = CombatChar;
-      EventData.Target = CombatChar;
-      ASC->HandleGameplayEvent(
-          FGameplayTag::RequestGameplayTag(FName("Event.Notify.Enemies")),
-          &EventData);
+  if (CombatBase) {
+    ComboAttackMontage = CombatBase->GetComboAttackMontage();
+    ComboSectionNames = CombatBase->GetComboSectionNames();
+    // Set target combo count: max for player, random for AI
+    if (CombatBase->IsPlayerControlled()) {
+      TargetComboCount = ComboSectionNames.Num();
+    } else {
+      TargetComboCount = FMath::RandRange(1, ComboSectionNames.Num());
     }
-  } else if (CombatEnemy) {
-    ComboAttackMontage = CombatEnemy->GetComboAttackMontage();
-    ComboSectionNames = CombatEnemy->GetComboSectionNames();
-    TargetComboCount = FMath::RandRange(1, ComboSectionNames.Num());
+
     // Set attacking flag
-    CombatEnemy->SetIsAttacking(true);
+    CombatBase->SetIsAttacking(true);
     // Notify enemies of attack via ability
     if (UAbilitySystemComponent *ASC =
             GetAbilitySystemComponentFromActorInfo()) {
       FGameplayEventData EventData;
-      EventData.Instigator = CombatEnemy;
-      EventData.Target = CombatEnemy;
+      EventData.Instigator = TObjectPtr<AActor>(CombatBase);
+      EventData.Target = TObjectPtr<AActor>(CombatBase);
       ASC->HandleGameplayEvent(
           FGameplayTag::RequestGameplayTag(FName("Event.Notify.Enemies")),
           &EventData);
@@ -86,9 +81,10 @@ void UCombatComboAttackAbility::ActivateAbility(
                                           ComboAttackMontage);
 
       // Set end delegate
-      MontageEndedDelegate.BindUObject(
+      FOnMontageEnded MontageEndDelegate;
+      MontageEndDelegate.BindUObject(
           this, &UCombatComboAttackAbility::OnMontageEnded);
-      AnimInstance->Montage_SetEndDelegate(MontageEndedDelegate,
+      AnimInstance->Montage_SetEndDelegate(MontageEndDelegate,
                                            ComboAttackMontage);
     }
   } else {
@@ -107,12 +103,10 @@ void UCombatComboAttackAbility::ActivateAbility(
 void UCombatComboAttackAbility::OnMontageEnded(UAnimMontage *Montage,
                                                bool bInterrupted) {
   // Call the character's attack montage ended function
-  ACombatCharacter *CombatChar = GetCombatCharacterFromActorInfo();
-  ACombatEnemy *CombatEnemy = GetCombatEnemyFromActorInfo();
-  if (CombatChar) {
-    CombatChar->AttackMontageEnded(Montage, bInterrupted);
-  } else if (CombatEnemy) {
-    CombatEnemy->AttackMontageEnded(Montage, bInterrupted);
+  if (AActor *Avatar = GetCurrentActorInfo()->AvatarActor.Get()) {
+    if (ACombatBase *CombatBase = Cast<ACombatBase>(Avatar)) {
+      CombatBase->AttackMontageEnded(Montage, bInterrupted);
+    }
   }
 
   EndAbility(CurrentSpecHandle, GetCurrentActorInfo(),
@@ -125,12 +119,9 @@ void UCombatComboAttackAbility::EndAbility(
     const FGameplayAbilityActivationInfo ActivationInfo,
     bool bReplicateEndAbility, bool bWasCancelled) {
   // Reset attacking flag
-  ACombatCharacter *CombatChar = GetCombatCharacterFromActorInfo();
-  ACombatEnemy *CombatEnemy = GetCombatEnemyFromActorInfo();
-  if (CombatChar) {
-    CombatChar->SetIsAttacking(false);
-  } else if (CombatEnemy) {
-    CombatEnemy->SetIsAttacking(false);
+  ACombatBase *CombatBase = GetCombatBaseFromActorInfo();
+  if (CombatBase) {
+    CombatBase->SetIsAttacking(false);
   }
 
   // Stop montage only if cancelled
@@ -162,24 +153,27 @@ void UCombatComboAttackAbility::EndAbility(
 
 void UCombatComboAttackAbility::HandleComboNext(
     const FGameplayEventData *EventData) {
-  ACombatCharacter *CombatChar = GetCombatCharacterFromActorInfo();
-  ACombatEnemy *CombatEnemy = GetCombatEnemyFromActorInfo();
+  ACombatBase *CombatBase = GetCombatBaseFromActorInfo();
 
   bool bShouldContinueCombo = true;
 
-  if (CombatChar) {
-    // For player, check if input is not stale
-    float CurrentTime = GetWorld()->GetTimeSeconds();
-    if (CurrentTime - CombatChar->GetCachedComboAttackInputTime() >
-        CombatChar->GetComboInputCacheTimeTolerance()) {
-      // Input is stale, end combo
-      bShouldContinueCombo = false;
+  if (CombatBase) {
+    if (CombatBase->IsPlayerControlled()) {
+      // For player, check if input is not stale
+      float CurrentTime = GetWorld()->GetTimeSeconds();
+      if (CurrentTime - CombatBase->GetCachedComboAttackInputTime() >
+          CombatBase->GetComboInputCacheTimeTolerance()) {
+        // Input is stale, end combo
+        bShouldContinueCombo = false;
+      } else {
+        // Consume the input
+        CombatBase->SetCachedComboAttackInputTime(0.0f);
+      }
     } else {
-      // Consume the input
-      CombatChar->SetCachedComboAttackInputTime(0.0f);
+      // For AI, always continue until target combo count
+      bShouldContinueCombo = true;
     }
   }
-  // For AI, always continue until target combo count
 
   if (bShouldContinueCombo) {
     CurrentComboCount++;

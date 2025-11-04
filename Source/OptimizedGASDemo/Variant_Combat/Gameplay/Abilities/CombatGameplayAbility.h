@@ -6,9 +6,6 @@
 #include "Abilities/GameplayAbility.h"
 #include "CombatGameplayAbility.generated.h"
 
-class ACombatCharacter;
-class ACombatEnemy;
-
 /**
  * Base GameplayAbility class for combat system
  */
@@ -47,9 +44,6 @@ protected:
   UFUNCTION(BlueprintImplementableEvent, Category = Ability)
   void OnAbilityEnded(bool bWasCancelled);
 
-  /** Returns the CombatCharacter that owns this ability */
-  class ACombatCharacter *GetCombatCharacterFromActorInfo() const;
-
-  /** Returns the CombatEnemy that owns this ability */
-  class ACombatEnemy *GetCombatEnemyFromActorInfo() const;
+  /** Returns the CombatBase that owns this ability */
+  class ACombatBase *GetCombatBaseFromActorInfo() const;
 };

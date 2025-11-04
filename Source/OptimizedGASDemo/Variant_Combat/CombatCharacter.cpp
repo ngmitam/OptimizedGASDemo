@@ -26,6 +26,7 @@
 #include "Gameplay/Effects/CombatDamageGameplayEffect.h"
 #include "Gameplay/Data/AttackEventData.h"
 
+/** Constructor */
 ACombatCharacter::ACombatCharacter() {
   PrimaryActorTick.bCanEverTick = true;
 
@@ -72,13 +73,13 @@ ACombatCharacter::ACombatCharacter() {
   PawnData = CreateDefaultSubobject<UCombatPawnData>(TEXT("PawnData"));
   if (PawnData) {
     // Set default attributes
-    PawnData->DefaultHealth = 100.0f;
-    PawnData->DefaultMaxHealth = 100.0f;
-    PawnData->DefaultDamage = 5.0f;
-    PawnData->DefaultKnockbackImpulse = 500.0f;
-    PawnData->DefaultLaunchImpulse = 300.0f;
-    PawnData->DefaultTraceDistance = 75.0f;
-    PawnData->DefaultTraceRadius = 75.0f;
+    PawnData->DefaultHealth = MaxHP;
+    PawnData->DefaultMaxHealth = MaxHP;
+    PawnData->DefaultDamage = MeleeDamage;
+    PawnData->DefaultKnockbackImpulse = MeleeKnockbackImpulse;
+    PawnData->DefaultLaunchImpulse = MeleeLaunchImpulse;
+    PawnData->DefaultTraceDistance = MeleeTraceDistance;
+    PawnData->DefaultTraceRadius = MeleeTraceRadius;
 
     // Add granted abilities
     PawnData->GrantedAbilities.Add(UCombatReceiveDamageAbility::StaticClass());
@@ -86,15 +87,10 @@ ACombatCharacter::ACombatCharacter() {
     PawnData->GrantedAbilities.Add(UCombatTraceAttackAbility::StaticClass());
     PawnData->GrantedAbilities.Add(UCombatChargedAttackAbility::StaticClass());
     PawnData->GrantedAbilities.Add(UCombatComboAttackAbility::StaticClass());
-    PawnData->GrantedAbilities.Add(UCombatNotifyEnemiesAbility::StaticClass());
   }
 
   // set the player tag
   Tags.Add(FName("Player"));
-}
-
-UAbilitySystemComponent *ACombatCharacter::GetAbilitySystemComponent() const {
-  return AbilitySystemComponent;
 }
 
 void ACombatCharacter::Move(const FInputActionValue &Value) {
@@ -168,13 +164,9 @@ void ACombatCharacter::DoComboAttackStart() {
     return; // Don't start a new attack while already attacking
   }
 
-  // Activate combo attack ability
-  if (AbilitySystemComponent) {
-    FGameplayTagContainer AbilityTags;
-    AbilityTags.AddTag(
-        FGameplayTag::RequestGameplayTag(FName("Ability.Type.Attack.Combo")));
-    AbilitySystemComponent->TryActivateAbilitiesByTag(AbilityTags);
-  }
+  // Send gameplay event to activate combo attack ability
+  SendGameplayEvent(
+      FGameplayTag::RequestGameplayTag(FName("Event.Attack.Combo.Start")));
 }
 
 void ACombatCharacter::DoComboAttackEnd() {
@@ -191,13 +183,9 @@ void ACombatCharacter::DoChargedAttackStart() {
     return;
   }
 
-  // Activate charged attack ability
-  if (AbilitySystemComponent) {
-    FGameplayTagContainer AbilityTags;
-    AbilityTags.AddTag(
-        FGameplayTag::RequestGameplayTag(FName("Ability.Type.Attack.Charged")));
-    AbilitySystemComponent->TryActivateAbilitiesByTag(AbilityTags);
-  }
+  // Send gameplay event to activate charged attack ability
+  SendGameplayEvent(
+      FGameplayTag::RequestGameplayTag(FName("Event.Attack.Charged.Start")));
 }
 
 void ACombatCharacter::DoChargedAttackEnd() {
@@ -221,150 +209,6 @@ void ACombatCharacter::DoChargedAttackEnd() {
   }
 }
 
-void ACombatCharacter::ResetHP() {
-  if (UAbilitySystemComponent *ASC = GetAbilitySystemComponent()) {
-    float MaxHealth = HealthComponent->GetMaxHealth();
-    ASC->SetNumericAttributeBase(UCombatAttributeSet::GetHealthAttribute(),
-                                 MaxHealth);
-  }
-
-  // update the life bar
-  LifeBarWidget->SetLifePercentage(1.0f);
-}
-
-void ACombatCharacter::AttackMontageEnded(UAnimMontage *Montage,
-                                          bool bInterrupted) {
-  // reset the attacking flags
-  bIsAttacking = false;
-
-  // check if we have a non-stale cached combo input
-  if (CachedComboAttackInputTime > 0 &&
-      GetWorld()->GetTimeSeconds() - CachedComboAttackInputTime <=
-          ComboInputCacheTimeTolerance) {
-    // consume the cached input
-    CachedComboAttackInputTime = 0.0f;
-  }
-
-  // check if we have a non-stale cached charged input
-  if (CachedChargedAttackInputTime > 0 &&
-      GetWorld()->GetTimeSeconds() - CachedChargedAttackInputTime <=
-          AttackInputCacheTimeTolerance) {
-    // consume the cached input
-    CachedChargedAttackInputTime = 0.0f;
-  }
-}
-
-void ACombatCharacter::DoAttackTrace(FName DamageSourceBone) {
-  // Send gameplay event to activate attack trace ability
-  if (AbilitySystemComponent) {
-    FGameplayEventData EventData;
-    EventData.Instigator = this;
-    EventData.Target = this;
-
-    // Create attack event data with damage source bone
-    UAttackEventData *AttackData = NewObject<UAttackEventData>(this);
-    AttackData->DamageSourceBone = DamageSourceBone;
-    EventData.OptionalObject = AttackData;
-
-    AbilitySystemComponent->HandleGameplayEvent(
-        FGameplayTag::RequestGameplayTag(FName("Event.Attack.Trace")),
-        &EventData);
-  }
-}
-
-void ACombatCharacter::CheckCombo() {
-  // Send gameplay event to advance combo
-  if (AbilitySystemComponent) {
-    FGameplayEventData EventData;
-    EventData.Instigator = this;
-    EventData.Target = this;
-
-    AbilitySystemComponent->HandleGameplayEvent(
-        FGameplayTag::RequestGameplayTag(FName("Event.Attack.Combo.Next")),
-        &EventData);
-  }
-}
-
-void ACombatCharacter::CheckChargedAttack() {
-  // Send gameplay event for charged attack check
-  if (AbilitySystemComponent) {
-    FGameplayEventData EventData;
-    EventData.Instigator = this;
-    EventData.Target = this;
-
-    if (bIsChargingAttack) {
-      // Still charging, loop
-      AbilitySystemComponent->HandleGameplayEvent(
-          FGameplayTag::RequestGameplayTag(FName("Event.Attack.Charged.Loop")),
-          &EventData);
-    } else {
-      // Release attack
-      AbilitySystemComponent->HandleGameplayEvent(
-          FGameplayTag::RequestGameplayTag(
-              FName("Event.Attack.Charged.Release")),
-          &EventData);
-    }
-  }
-}
-
-void ACombatCharacter::NotifyEnemiesOfAttack() {
-  if (AbilitySystemComponent) {
-    FGameplayEventData EventData;
-    EventData.Instigator = this;
-    EventData.Target = this;
-
-    AbilitySystemComponent->HandleGameplayEvent(
-        FGameplayTag::RequestGameplayTag(FName("Event.Notify.Enemies")),
-        &EventData);
-  }
-}
-
-void ACombatCharacter::ApplyDamage(float Damage, AActor *DamageCauser,
-                                   const FVector &DamageLocation,
-                                   const FVector &DamageImpulse) {
-  // Send gameplay event to activate receive damage ability
-  if (AbilitySystemComponent) {
-    FGameplayEventData EventData;
-    EventData.EventMagnitude = Damage;
-    EventData.Instigator = DamageCauser;
-    EventData.Target = this;
-
-    UDamageEventData *DamageData = NewObject<UDamageEventData>();
-    DamageData->Location = DamageLocation;
-    DamageData->Impulse = DamageImpulse;
-    EventData.OptionalObject = DamageData;
-
-    AbilitySystemComponent->HandleGameplayEvent(
-        FGameplayTag::RequestGameplayTag(FName("Event.Damage.Received")),
-        &EventData);
-  }
-}
-
-void ACombatCharacter::HandleDeath() {
-  // Send gameplay event to activate death ability
-  if (AbilitySystemComponent) {
-    FGameplayEventData EventData;
-    EventData.Instigator = this;
-    EventData.Target = this;
-
-    AbilitySystemComponent->HandleGameplayEvent(
-        FGameplayTag::RequestGameplayTag(FName("Event.Death")), &EventData);
-  }
-
-  // enable full ragdoll physics
-  GetMesh()->SetSimulatePhysics(true);
-
-  // hide the life bar
-  LifeBar->SetHiddenInGame(true);
-
-  // pull back the camera
-  GetCameraBoom()->TargetArmLength = DeathCameraDistance;
-}
-
-void ACombatCharacter::ApplyHealing(float Healing, AActor *Healer) {
-  // stub
-}
-
 void ACombatCharacter::Landed(const FHitResult &Hit) {
   Super::Landed(Hit);
 
@@ -385,7 +229,8 @@ void ACombatCharacter::BeginPlay() {
   // initialize the camera
   GetCameraBoom()->TargetArmLength = DefaultCameraDistance;
 
-  // save the relative transform for the mesh so we can reset the ragdoll later
+  // save the relative transform for the mesh so we can reset the
+  // ragdoll later
   MeshStartingTransform = GetMesh()->GetRelativeTransform();
 
   // set the life bar color
@@ -393,72 +238,6 @@ void ACombatCharacter::BeginPlay() {
 
   // reset HP to maximum
   ResetHP();
-
-  // Initialize GAS
-  if (AbilitySystemComponent) {
-    AbilitySystemComponent->InitAbilityActorInfo(this, this);
-
-    // Initialize attributes
-    if (PawnData) {
-      // Load from data table if specified
-      PawnData->LoadFromDataTable();
-
-      // Set default attributes from PawnData
-      AbilitySystemComponent->SetNumericAttributeBase(
-          AttributeSet->GetHealthAttribute(), PawnData->DefaultHealth);
-      AbilitySystemComponent->SetNumericAttributeBase(
-          AttributeSet->GetMaxHealthAttribute(), PawnData->DefaultMaxHealth);
-      AbilitySystemComponent->SetNumericAttributeBase(
-          AttributeSet->GetDamageAttribute(), PawnData->DefaultDamage);
-      AbilitySystemComponent->SetNumericAttributeBase(
-          AttributeSet->GetKnockbackImpulseAttribute(),
-          PawnData->DefaultKnockbackImpulse);
-      AbilitySystemComponent->SetNumericAttributeBase(
-          AttributeSet->GetLaunchImpulseAttribute(),
-          PawnData->DefaultLaunchImpulse);
-      AbilitySystemComponent->SetNumericAttributeBase(
-          AttributeSet->GetTraceDistanceAttribute(),
-          PawnData->DefaultTraceDistance);
-      AbilitySystemComponent->SetNumericAttributeBase(
-          AttributeSet->GetTraceRadiusAttribute(),
-          PawnData->DefaultTraceRadius);
-
-      // Grant abilities
-      for (TSubclassOf<UGameplayAbility> AbilityClass :
-           PawnData->GrantedAbilities) {
-        if (AbilityClass) {
-          FGameplayAbilitySpec AbilitySpec(AbilityClass, 1);
-          AbilitySystemComponent->GiveAbility(AbilitySpec);
-        }
-      }
-
-      // Apply granted effects
-      for (TSubclassOf<UGameplayEffect> EffectClass :
-           PawnData->GrantedEffects) {
-        if (EffectClass) {
-          FGameplayEffectSpecHandle EffectSpecHandle =
-              AbilitySystemComponent->MakeOutgoingSpec(
-                  EffectClass, 1.0f,
-                  AbilitySystemComponent->MakeEffectContext());
-          if (EffectSpecHandle.IsValid()) {
-            AbilitySystemComponent->ApplyGameplayEffectSpecToTarget(
-                *EffectSpecHandle.Data.Get(), AbilitySystemComponent);
-          }
-        }
-      }
-    }
-  }
-
-  // Initialize health component
-  if (UAbilitySystemComponent *ASC = GetAbilitySystemComponent()) {
-    HealthComponent->InitializeWithAbilitySystem(ASC);
-  }
-
-  // Bind to health component delegates for UI updates
-  HealthComponent->OnHealthChanged.AddUObject(
-      this, &ACombatCharacter::OnHealthComponentChanged);
-  HealthComponent->OnMaxHealthChanged.AddUObject(
-      this, &ACombatCharacter::OnMaxHealthComponentChanged);
 }
 
 void ACombatCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason) {
@@ -514,25 +293,6 @@ void ACombatCharacter::NotifyControllerChanged() {
           Cast<ACombatPlayerController>(GetController())) {
     PC->SetRespawnTransform(GetActorTransform());
   }
-}
-
-void ACombatCharacter::OnHealthComponentChanged(float NewHealth) {
-  if (LifeBarWidget) {
-    float MaxHealth = HealthComponent->GetMaxHealth();
-    LifeBarWidget->SetLifePercentage(NewHealth / MaxHealth);
-  }
-}
-
-void ACombatCharacter::OnMaxHealthComponentChanged(float NewMaxHealth) {
-  if (LifeBarWidget) {
-    float CurrentHealth = HealthComponent->GetHealth();
-    LifeBarWidget->SetLifePercentage(CurrentHealth / NewMaxHealth);
-  }
-}
-
-void ACombatCharacter::NotifyDanger(const FVector &DangerLocation,
-                                    AActor *DangerSource) {
-  // Implement if needed, e.g., play animation or something
 }
 
 void ACombatCharacter::RespawnCharacter() {

@@ -75,3 +75,11 @@ void UCombatDeathAbility::OnDeathTimerExpired() {
   EndAbility(CurrentSpecHandle, CurrentActorInfo, CurrentActivationInfo, false,
              false);
 }
+
+ACombatCharacter *UCombatDeathAbility::GetCombatCharacterFromActorInfo() const {
+  return Cast<ACombatCharacter>(GetAvatarActorFromActorInfo());
+}
+
+ACombatEnemy *UCombatDeathAbility::GetCombatEnemyFromActorInfo() const {
+  return Cast<ACombatEnemy>(GetAvatarActorFromActorInfo());
+}

@@ -6,6 +6,9 @@
 #include "CombatGameplayAbility.h"
 #include "CombatDeathAbility.generated.h"
 
+class ACombatCharacter;
+class ACombatEnemy;
+
 /**
  * GameplayAbility for death
  */
@@ -36,4 +39,10 @@ protected:
 
   /** Called when death timer expires */
   void OnDeathTimerExpired();
+
+  /** Returns the CombatCharacter that owns this ability */
+  class ACombatCharacter *GetCombatCharacterFromActorInfo() const;
+
+  /** Returns the CombatEnemy that owns this ability */
+  class ACombatEnemy *GetCombatEnemyFromActorInfo() const;
 };

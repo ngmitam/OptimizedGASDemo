@@ -6,6 +6,8 @@
 #include "CombatGameplayAbility.h"
 #include "CombatTraceAttackAbility.generated.h"
 
+class ACombatCharacter;
+
 /**
  * GameplayAbility for performing attack traces
  */
@@ -48,4 +50,7 @@ protected:
 
   /** Perform the attack trace */
   void PerformAttackTrace();
+
+  /** Returns the CombatCharacter that owns this ability */
+  class ACombatCharacter *GetCombatCharacterFromActorInfo() const;
 };

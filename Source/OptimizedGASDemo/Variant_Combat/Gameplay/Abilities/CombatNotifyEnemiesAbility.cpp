@@ -3,7 +3,6 @@
 #include "CombatNotifyEnemiesAbility.h"
 #include "AbilitySystemComponent.h"
 #include "CombatCharacter.h"
-#include "AI/CombatEnemy.h"
 #include "GameplayTagsManager.h"
 
 UCombatNotifyEnemiesAbility::UCombatNotifyEnemiesAbility() {
@@ -48,12 +47,14 @@ void UCombatNotifyEnemiesAbility::ActivateAbility(
   float DangerTraceDistance = 300.0f;
   float DangerTraceRadius = 75.0f;
 
-  if (ACombatCharacter *CombatChar = Cast<ACombatCharacter>(AvatarActor)) {
-    DangerTraceDistance = CombatChar->GetDangerTraceDistance();
-    DangerTraceRadius = CombatChar->GetDangerTraceRadius();
-  } else if (ACombatEnemy *CombatEnemy = Cast<ACombatEnemy>(AvatarActor)) {
-    // Assuming CombatEnemy has similar properties, or use defaults
-    // For now, use defaults
+  ACombatCharacter *CombatBase = GetCombatCharacterFromActorInfo();
+  if (CombatBase) {
+    DangerTraceDistance = CombatBase->GetDangerTraceDistance();
+    DangerTraceRadius = CombatBase->GetDangerTraceRadius();
+  } else {
+    // For enemies or if not found, use defaults and end ability
+    EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
+    return;
   }
 
   // Sweep for objects in front of the character to be hit by the attack
@@ -94,4 +95,9 @@ void UCombatNotifyEnemiesAbility::ActivateAbility(
 
   // End ability immediately after performing trace
   EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
+}
+
+ACombatCharacter *
+UCombatNotifyEnemiesAbility::GetCombatCharacterFromActorInfo() const {
+  return Cast<ACombatCharacter>(GetAvatarActorFromActorInfo());
 }

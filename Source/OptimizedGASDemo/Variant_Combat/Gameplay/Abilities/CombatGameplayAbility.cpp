@@ -1,8 +1,7 @@
 // Copyright Nguyen Minh Tam. All Rights Reserved.
 
 #include "CombatGameplayAbility.h"
-#include "CombatCharacter.h"
-#include "AI/CombatEnemy.h"
+#include "CombatBase.h"
 
 UCombatGameplayAbility::UCombatGameplayAbility() {}
 
@@ -37,11 +36,6 @@ void UCombatGameplayAbility::EndAbility(
   OnAbilityEnded(bWasCancelled);
 }
 
-ACombatCharacter *
-UCombatGameplayAbility::GetCombatCharacterFromActorInfo() const {
-  return Cast<ACombatCharacter>(GetAvatarActorFromActorInfo());
-}
-
-ACombatEnemy *UCombatGameplayAbility::GetCombatEnemyFromActorInfo() const {
-  return Cast<ACombatEnemy>(GetAvatarActorFromActorInfo());
+ACombatBase *UCombatGameplayAbility::GetCombatBaseFromActorInfo() const {
+  return Cast<ACombatBase>(GetAvatarActorFromActorInfo());
 }

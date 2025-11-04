@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/Character.h"
+#include "CombatBase.h"
 #include "AbilitySystemInterface.h"
 #include "AbilitySystemComponent.h"
 #include "CombatAttacker.h"
@@ -14,14 +14,19 @@
 #include "Gameplay/Data/CombatPawnData.h"
 #include "EnhancedInputComponent.h"
 #include "Gameplay/Data/DamageEventData.h"
+#include "GameFramework/Character.h"
+#include "Camera/CameraComponent.h"
+#include "GameFramework/SpringArmComponent.h"
+#include "Components/WidgetComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Gameplay/Abilities/CombatReceiveDamageAbility.h"
+#include "Gameplay/Abilities/CombatDeathAbility.h"
+#include "Gameplay/Abilities/CombatTraceAttackAbility.h"
+#include "Gameplay/Abilities/CombatChargedAttackAbility.h"
+#include "Gameplay/Abilities/CombatComboAttackAbility.h"
+#include "Gameplay/Abilities/CombatNotifyEnemiesAbility.h"
 #include "CombatCharacter.generated.h"
-
-class USpringArmComponent;
-class UCameraComponent;
-class UInputAction;
-struct FInputActionValue;
-class UCombatLifeBar;
-class UWidgetComponent;
 
 /**
  *  An enhanced Third Person Character with melee combat capabilities:
@@ -31,11 +36,8 @@ class UWidgetComponent;
  *  - Death
  *  - Respawning
  */
-UCLASS(abstract)
-class ACombatCharacter : public ACharacter,
-                         public IAbilitySystemInterface,
-                         public ICombatAttacker,
-                         public ICombatDamageable {
+UCLASS()
+class ACombatCharacter : public ACombatBase {
   GENERATED_BODY()
 
   /** Camera boom positioning the camera behind the character */
@@ -47,30 +49,6 @@ class ACombatCharacter : public ACharacter,
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
             meta = (AllowPrivateAccess = "true"))
   UCameraComponent *FollowCamera;
-
-  /** Life bar widget component */
-  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
-            meta = (AllowPrivateAccess = "true"))
-  UWidgetComponent *LifeBar;
-
-  /** Health component for managing health */
-  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
-            meta = (AllowPrivateAccess = "true"))
-  UHealthComponent *HealthComponent;
-
-  /** The ability system component for this character */
-  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
-            meta = (AllowPrivateAccess = "true"))
-  UAbilitySystemComponent *AbilitySystemComponent;
-
-  /** The attribute set for this character */
-  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
-            meta = (AllowPrivateAccess = "true"))
-  UCombatAttributeSet *AttributeSet;
-
-  /** Pawn data for attributes and abilities */
-  UPROPERTY(EditDefaultsOnly, Category = "GAS")
-  UCombatPawnData *PawnData;
 
 protected:
   /** Jump Input Action */
@@ -101,103 +79,9 @@ protected:
   UPROPERTY(EditAnywhere, Category = "Input")
   UInputAction *ToggleCameraAction;
 
-  /** Max amount of HP the character will have on respawn */
-  // Removed: configured in PlayerState now
-
   /** Life bar widget fill color */
   UPROPERTY(EditAnywhere, Category = "Damage")
   FLinearColor LifeBarColor;
-
-  /** Name of the pelvis bone, for damage ragdoll physics */
-  UPROPERTY(EditAnywhere, Category = "Damage")
-  FName PelvisBoneName;
-
-  /** Pointer to the life bar widget */
-  UPROPERTY(EditAnywhere, Category = "Damage")
-  TObjectPtr<UCombatLifeBar> LifeBarWidget;
-
-  /** Max amount of time that may elapse for a non-combo attack input to not be
-   * considered stale */
-  UPROPERTY(EditAnywhere, Category = "Melee Attack",
-            meta = (ClampMin = 0, ClampMax = 5, Units = "s"))
-  float AttackInputCacheTimeTolerance = 2.0f;
-
-  /** Time at which a combo attack button was last pressed */
-  float CachedComboAttackInputTime = 0.0f;
-
-  /** Time at which a charged attack button was last pressed */
-  float CachedChargedAttackInputTime = 0.0f;
-
-  /** If true, the character is currently playing an attack animation */
-  bool bIsAttacking = false;
-
-  /** Distance ahead of the character that melee attack sphere collision traces
-   * will extend */
-  UPROPERTY(EditAnywhere, Category = "Melee Attack|Trace",
-            meta = (ClampMin = 0, ClampMax = 500, Units = "cm"))
-  float MeleeTraceDistance = 75.0f;
-
-  /** Radius of the sphere trace for melee attacks */
-  UPROPERTY(EditAnywhere, Category = "Melee Attack|Trace",
-            meta = (ClampMin = 0, ClampMax = 200, Units = "cm"))
-  float MeleeTraceRadius = 75.0f;
-
-  /** Distance ahead of the character that enemies will be notified of incoming
-   * attacks */
-  UPROPERTY(EditAnywhere, Category = "Melee Attack|Trace",
-            meta = (ClampMin = 0, ClampMax = 500, Units = "cm"))
-  float DangerTraceDistance = 300.0f;
-
-  /** Radius of the sphere trace to notify enemies of incoming attacks */
-  UPROPERTY(EditAnywhere, Category = "Melee Attack|Trace",
-            meta = (ClampMin = 0, ClampMax = 200, Units = "cm"))
-  float DangerTraceRadius = 100.0f;
-
-  /** Amount of damage a melee attack will deal */
-  // Removed: configured in PlayerState now
-
-  /** Amount of knockback impulse a melee attack will apply */
-  // Removed: configured in PlayerState now
-
-  /** Amount of upwards impulse a melee attack will apply */
-  // Removed: configured in PlayerState now
-
-  /** AnimMontage that will play for combo attacks */
-  UPROPERTY(EditAnywhere, Category = "Melee Attack|Combo")
-  UAnimMontage *ComboAttackMontage;
-
-  /** Names of the AnimMontage sections that correspond to each stage of the
-   * combo attack */
-  UPROPERTY(EditAnywhere, Category = "Melee Attack|Combo")
-  TArray<FName> ComboSectionNames;
-
-  /** Max amount of time that may elapse for a combo attack input to not be
-   * considered stale */
-  UPROPERTY(EditAnywhere, Category = "Melee Attack|Combo",
-            meta = (ClampMin = 0, ClampMax = 5, Units = "s"))
-  float ComboInputCacheTimeTolerance = 0.45f;
-
-  /** Index of the current stage of the melee attack combo */
-  int32 ComboCount = 0;
-
-  /** AnimMontage that will play for charged attacks */
-  UPROPERTY(EditAnywhere, Category = "Melee Attack|Charged")
-  UAnimMontage *ChargedAttackMontage;
-
-  /** Name of the AnimMontage section that corresponds to the charge loop */
-  UPROPERTY(EditAnywhere, Category = "Melee Attack|Charged")
-  FName ChargeLoopSection;
-
-  /** Name of the AnimMontage section that corresponds to the attack */
-  UPROPERTY(EditAnywhere, Category = "Melee Attack|Charged")
-  FName ChargeAttackSection;
-
-  /** Flag that determines if the player is currently holding the charged attack
-   * input */
-  bool bIsChargingAttack = false;
-
-  /** If true, the charged attack hold check has been tested at least once */
-  bool bHasLoopedChargedAttack = false;
 
   /** Camera boom length while the character is dead */
   UPROPERTY(EditAnywhere, Category = "Camera",
@@ -214,9 +98,6 @@ protected:
             meta = (ClampMin = 0, ClampMax = 10, Units = "s"))
   float RespawnTime = 3.0f;
 
-  /** Attack montage ended delegate */
-  FOnMontageEnded OnAttackMontageEnded;
-
   /** Character respawn timer */
   FTimerHandle RespawnTimer;
 
@@ -224,21 +105,37 @@ protected:
    */
   FTransform MeshStartingTransform;
 
+  /** Max amount of time that may elapse for a non-combo attack input to not be
+   * considered stale */
+  UPROPERTY(EditAnywhere, Category = "Melee Attack",
+            meta = (ClampMin = 0, ClampMax = 5, Units = "s"))
+  float AttackInputCacheTimeTolerance = 2.0f;
+
+  /** Max amount of time that may elapse for a combo attack input to not be
+   * considered stale */
+  UPROPERTY(EditAnywhere, Category = "Melee Attack|Combo",
+            meta = (ClampMin = 0, ClampMax = 5, Units = "s"))
+  float ComboInputCacheTimeTolerance = 0.45f;
+
+  /** Time at which a combo attack button was last pressed */
+  float CachedComboAttackInputTime = 0.0f;
+
+  /** Time at which a charged attack button was last pressed */
+  float CachedChargedAttackInputTime = 0.0f;
+
 public:
-  /** Constructor */
   ACombatCharacter();
 
-  // ~begin IAbilitySystemInterface
-  virtual UAbilitySystemComponent *GetAbilitySystemComponent() const override;
-  // ~end IAbilitySystemInterface
-
-  /** Get combo attack montage */
-  UAnimMontage *GetComboAttackMontage() const { return ComboAttackMontage; }
-
-  /** Get combo section names */
-  const TArray<FName> &GetComboSectionNames() const {
-    return ComboSectionNames;
+  /** Get combo input cache time tolerance */
+  float GetComboInputCacheTimeTolerance() const override {
+    return ComboInputCacheTimeTolerance;
   }
+
+  /** Get danger trace distance */
+  float GetDangerTraceDistance() const { return DangerTraceDistance; }
+
+  /** Get danger trace radius */
+  float GetDangerTraceRadius() const { return DangerTraceRadius; }
 
   /** Get charged attack montage */
   UAnimMontage *GetChargedAttackMontage() const { return ChargedAttackMontage; }
@@ -248,12 +145,6 @@ public:
 
   /** Get charge attack section name */
   FName GetChargeAttackSection() const { return ChargeAttackSection; }
-
-  /** Get pelvis bone name */
-  FName GetPelvisBoneName() const { return PelvisBoneName; }
-
-  /** Set attacking flag */
-  void SetIsAttacking(bool bAttacking) { bIsAttacking = bAttacking; }
 
   /** Get cached combo attack input time */
   float GetCachedComboAttackInputTime() const {
@@ -274,17 +165,6 @@ public:
   void SetCachedChargedAttackInputTime(float Time) {
     CachedChargedAttackInputTime = Time;
   }
-
-  /** Get combo input cache time tolerance */
-  float GetComboInputCacheTimeTolerance() const {
-    return ComboInputCacheTimeTolerance;
-  }
-
-  /** Get danger trace distance */
-  float GetDangerTraceDistance() const { return DangerTraceDistance; }
-
-  /** Get danger trace radius */
-  float GetDangerTraceRadius() const { return DangerTraceRadius; }
 
 protected:
   /** Called for movement input */
@@ -335,63 +215,19 @@ public:
   virtual void DoChargedAttackEnd();
 
 protected:
-  /** Resets the character's current HP to maximum */
-  void ResetHP();
-
   // ~begin CombatAttacker interface
-
-  /** Performs the collision check for an attack */
-  virtual void DoAttackTrace(FName DamageSourceBone) override;
-
-  /** Performs the combo string check */
-  virtual void CheckCombo() override;
-
-  /** Performs the charged attack hold check */
-  virtual void CheckChargedAttack() override;
-
-  // ~end CombatAttacker interface
-
-  // ~begin CombatDamageable interface
 
   /** Notifies nearby enemies that an attack is coming so they can react */
   void NotifyEnemiesOfAttack();
 
-  /** Handles damage and knockback events */
-  virtual void ApplyDamage(float Damage, AActor *DamageCauser,
-                           const FVector &DamageLocation,
-                           const FVector &DamageImpulse) override;
-
-  /** Handles death events */
-  virtual void HandleDeath() override;
-
-  /** Handles healing events */
-  virtual void ApplyHealing(float Healing, AActor *Healer) override;
-
-  /** Notifies of danger */
-  virtual void NotifyDanger(const FVector &DangerLocation,
-                            AActor *DangerSource) override;
-
-  // ~end CombatDamageable interface
+  // ~end CombatAttacker interface
 
 public:
-  /** Called from a delegate when the attack montage ends */
-  void AttackMontageEnded(UAnimMontage *Montage, bool bInterrupted);
-
   /** Called from the respawn timer to destroy and re-create the character */
   void RespawnCharacter();
 
   /** Overrides landing to reset damage ragdoll physics */
   virtual void Landed(const FHitResult &Hit) override;
-
-public:
-  /** Blueprint handler to play damage received effects */
-  UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
-  void ReceivedDamage(float Damage, const FVector &ImpactPoint,
-                      const FVector &DamageDirection);
-
-  /** Blueprint handler to play damage dealt effects */
-  UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
-  void DealtDamage(float Damage, const FVector &ImpactPoint);
 
 protected:
   /** Initialization */

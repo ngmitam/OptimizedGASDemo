@@ -6,6 +6,8 @@
 #include "Gameplay/Abilities/CombatGameplayAbility.h"
 #include "CombatNotifyEnemiesAbility.generated.h"
 
+class ACombatCharacter;
+
 /**
  * Ability to notify enemies of incoming attack by performing a trace sweep
  */
@@ -21,4 +23,7 @@ public:
                   const FGameplayAbilityActorInfo *ActorInfo,
                   const FGameplayAbilityActivationInfo ActivationInfo,
                   const FGameplayEventData *TriggerEventData) override;
+
+  /** Returns the CombatCharacter that owns this ability */
+  class ACombatCharacter *GetCombatCharacterFromActorInfo() const;
 };

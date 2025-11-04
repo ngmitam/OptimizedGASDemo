@@ -1,8 +1,8 @@
 // Copyright Nguyen Minh Tam. All Rights Reserved.
 
 #include "CombatTraceAttackAbility.h"
+#include "CombatBase.h"
 #include "CombatCharacter.h"
-#include "AI/CombatEnemy.h"
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemGlobals.h"
 #include "GameplayTagsManager.h"
@@ -28,7 +28,7 @@ UCombatTraceAttackAbility::UCombatTraceAttackAbility() {
   // Add trigger to activate on attack start event
   FAbilityTriggerData TriggerData;
   TriggerData.TriggerTag =
-      FGameplayTag::RequestGameplayTag(FName("Event.Attack.Trace"));
+      FGameplayTag::RequestGameplayTag(FName("Event.Trace.Attack"));
   TriggerData.TriggerSource = EGameplayAbilityTriggerSource::GameplayEvent;
   AbilityTriggers.Add(TriggerData);
 }
@@ -168,9 +168,15 @@ void UCombatTraceAttackAbility::PerformAttackTrace() {
       }
 
       // Call DealtDamage for visual effects on attacker
-      if (ACombatCharacter *CombatChar = Cast<ACombatCharacter>(AvatarActor)) {
-        CombatChar->DealtDamage(Damage, HitResult.ImpactPoint);
+      ACombatCharacter *CombatCharacter = GetCombatCharacterFromActorInfo();
+      if (CombatCharacter) {
+        CombatCharacter->DealtDamage(Damage, HitResult.ImpactPoint);
       }
     }
   }
+}
+
+ACombatCharacter *
+UCombatTraceAttackAbility::GetCombatCharacterFromActorInfo() const {
+  return Cast<ACombatCharacter>(GetAvatarActorFromActorInfo());
 }

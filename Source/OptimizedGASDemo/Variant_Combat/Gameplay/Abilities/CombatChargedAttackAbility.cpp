@@ -2,8 +2,9 @@
 
 #include "CombatChargedAttackAbility.h"
 #include "AbilitySystemComponent.h"
+#include "CombatBase.h"
 #include "CombatCharacter.h"
-#include "CombatEnemy.h"
+#include "AI/CombatEnemy.h"
 #include "Animation/AnimInstance.h"
 #include "GameplayTagsManager.h"
 
@@ -22,6 +23,13 @@ UCombatChargedAttackAbility::UCombatChargedAttackAbility() {
   CancelAbilitiesWithTag.AddTag(
       FGameplayTag::RequestGameplayTag(FName("Ability.Type.Death")));
 
+  // Add trigger to activate on charged start event
+  FAbilityTriggerData StartTriggerData;
+  StartTriggerData.TriggerTag =
+      FGameplayTag::RequestGameplayTag(FName("Event.Attack.Charged.Start"));
+  StartTriggerData.TriggerSource = EGameplayAbilityTriggerSource::GameplayEvent;
+  AbilityTriggers.Add(StartTriggerData);
+
   // Set default montage sections
   ChargeLoopSection = FName("ChargeLoop");
   ChargeAttackSection = FName("ChargeAttack");
@@ -38,41 +46,31 @@ void UCombatChargedAttackAbility::ActivateAbility(
   }
 
   // Determine if player or AI and get montage
-  ACombatCharacter *CombatChar = GetCombatCharacterFromActorInfo();
-  ACombatEnemy *CombatEnemy = GetCombatEnemyFromActorInfo();
+  ACombatBase *CombatBase = GetCombatBaseFromActorInfo();
 
-  if (CombatChar) {
-    bIsPlayerControlled = true;
-    ChargedAttackMontage = CombatChar->GetChargedAttackMontage();
-    ChargeLoopSection = CombatChar->GetChargeLoopSection();
-    ChargeAttackSection = CombatChar->GetChargeAttackSection();
-    // Set attacking flag
-    CombatChar->SetIsAttacking(true);
-    // Notify enemies of attack via ability
-    if (UAbilitySystemComponent *ASC =
-            GetAbilitySystemComponentFromActorInfo()) {
-      FGameplayEventData EventData;
-      EventData.Instigator = CombatChar;
-      EventData.Target = CombatChar;
-      ASC->HandleGameplayEvent(
-          FGameplayTag::RequestGameplayTag(FName("Event.Notify.Enemies")),
-          &EventData);
+  if (CombatBase) {
+    if (Cast<ACombatCharacter>(CombatBase)) {
+      bIsPlayerControlled = true;
+    } else if (ACombatEnemy *CombatEnemy = Cast<ACombatEnemy>(CombatBase)) {
+      bIsPlayerControlled = false;
+      // For AI, set random target loops
+      TargetChargeLoops = FMath::RandRange(CombatEnemy->GetMinChargeLoops(),
+                                           CombatEnemy->GetMaxChargeLoops());
     }
-  } else if (CombatEnemy) {
-    bIsPlayerControlled = false;
-    ChargedAttackMontage = CombatEnemy->GetChargedAttackMontage();
-    ChargeLoopSection = CombatEnemy->GetChargeLoopSection();
-    ChargeAttackSection = CombatEnemy->GetChargeAttackSection();
-    // For AI, set random target loops
-    TargetChargeLoops = FMath::RandRange(MinChargeLoops, MaxChargeLoops);
+
+    ChargedAttackMontage = CombatBase->GetChargedAttackMontage();
+    ChargeLoopSection = CombatBase->GetChargeLoopSection();
+    ChargeAttackSection = CombatBase->GetChargeAttackSection();
+
     // Set attacking flag
-    CombatEnemy->SetIsAttacking(true);
+    CombatBase->SetIsAttacking(true);
+
     // Notify enemies of attack via ability
     if (UAbilitySystemComponent *ASC =
             GetAbilitySystemComponentFromActorInfo()) {
       FGameplayEventData EventData;
-      EventData.Instigator = CombatEnemy;
-      EventData.Target = CombatEnemy;
+      EventData.Instigator = TObjectPtr<AActor>(CombatBase);
+      EventData.Target = TObjectPtr<AActor>(CombatBase);
       ASC->HandleGameplayEvent(
           FGameplayTag::RequestGameplayTag(FName("Event.Notify.Enemies")),
           &EventData);
@@ -87,11 +85,14 @@ void UCombatChargedAttackAbility::ActivateAbility(
       AnimInstance->Montage_Play(ChargedAttackMontage, 1.0f);
 
       // Set end delegate
-      MontageEndedDelegate.BindUObject(
+      FOnMontageEnded MontageEndDelegate;
+      MontageEndDelegate.BindUObject(
           this, &UCombatChargedAttackAbility::OnMontageEnded);
-      AnimInstance->Montage_SetEndDelegate(MontageEndedDelegate,
+      AnimInstance->Montage_SetEndDelegate(MontageEndDelegate,
                                            ChargedAttackMontage);
     }
+  } else {
+    // No montage available
   }
 
   // Listen for events
@@ -112,12 +113,10 @@ void UCombatChargedAttackAbility::ActivateAbility(
 void UCombatChargedAttackAbility::OnMontageEnded(UAnimMontage *Montage,
                                                  bool bInterrupted) {
   // Call the character's attack montage ended function
-  ACombatCharacter *CombatChar = GetCombatCharacterFromActorInfo();
-  ACombatEnemy *CombatEnemy = GetCombatEnemyFromActorInfo();
-  if (CombatChar) {
-    CombatChar->AttackMontageEnded(Montage, bInterrupted);
-  } else if (CombatEnemy) {
-    CombatEnemy->AttackMontageEnded(Montage, bInterrupted);
+  if (AActor *Avatar = GetCurrentActorInfo()->AvatarActor.Get()) {
+    if (ACombatBase *CombatBase = Cast<ACombatBase>(Avatar)) {
+      CombatBase->AttackMontageEnded(Montage, bInterrupted);
+    }
   }
 
   EndAbility(CurrentSpecHandle, GetCurrentActorInfo(),
@@ -130,12 +129,9 @@ void UCombatChargedAttackAbility::EndAbility(
     const FGameplayAbilityActivationInfo ActivationInfo,
     bool bReplicateEndAbility, bool bWasCancelled) {
   // Reset attacking flag
-  ACombatCharacter *CombatChar = GetCombatCharacterFromActorInfo();
-  ACombatEnemy *CombatEnemy = GetCombatEnemyFromActorInfo();
-  if (CombatChar) {
-    CombatChar->SetIsAttacking(false);
-  } else if (CombatEnemy) {
-    CombatEnemy->SetIsAttacking(false);
+  ACombatBase *CombatBase = GetCombatBaseFromActorInfo();
+  if (CombatBase) {
+    CombatBase->SetIsAttacking(false);
   }
 
   // Stop montage only if cancelled
@@ -200,9 +196,20 @@ void UCombatChargedAttackAbility::HandleChargedAttackLoop(
 
 void UCombatChargedAttackAbility::HandleChargedAttackRelease(
     const FGameplayEventData *EventData) {
-  // Release attack
-  if (UAnimInstance *AnimInstance = GetCurrentActorInfo()->GetAnimInstance()) {
-    AnimInstance->Montage_JumpToSection(ChargeAttackSection,
-                                        ChargedAttackMontage);
+  if (!bIsPlayerControlled && CurrentChargeLoop < TargetChargeLoops) {
+    // For AI, if not enough loops, continue looping
+    CurrentChargeLoop++;
+    if (UAnimInstance *AnimInstance =
+            GetCurrentActorInfo()->GetAnimInstance()) {
+      AnimInstance->Montage_JumpToSection(ChargeLoopSection,
+                                          ChargedAttackMontage);
+    }
+  } else {
+    // Release attack
+    if (UAnimInstance *AnimInstance =
+            GetCurrentActorInfo()->GetAnimInstance()) {
+      AnimInstance->Montage_JumpToSection(ChargeAttackSection,
+                                          ChargedAttackMontage);
+    }
   }
 }

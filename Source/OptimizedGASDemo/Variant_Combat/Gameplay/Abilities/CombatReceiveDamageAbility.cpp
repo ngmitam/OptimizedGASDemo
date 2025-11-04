@@ -1,7 +1,7 @@
 // Copyright Nguyen Minh Tam. All Rights Reserved.
 
 #include "CombatReceiveDamageAbility.h"
-#include "CombatCharacter.h"
+#include "CombatBase.h"
 #include "AI/CombatEnemy.h"
 #include "Interfaces/CombatDamageable.h"
 #include "AbilitySystemComponent.h"
@@ -15,10 +15,6 @@
 UCombatReceiveDamageAbility::UCombatReceiveDamageAbility() {
   InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
   NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
-
-  // Set ability tags for event activation
-  ActivationOwnedTags.AddTag(
-      FGameplayTag::RequestGameplayTag(FName("Event.Damage.Received")));
 
   // Ability tags
   FGameplayTagContainer AssetTags;
@@ -130,21 +126,22 @@ void UCombatReceiveDamageAbility::ActivateAbility(
     // Call ReceivedDamage for visual effects on character
     if (ActorInfo->AvatarActor.IsValid()) {
       // Check if actor is CombatCharacter or CombatEnemy
-      ACombatCharacter *CombatChar = GetCombatCharacterFromActorInfo();
-      ACombatEnemy *CombatEnemy = GetCombatEnemyFromActorInfo();
-      if (CombatChar) {
-        CombatChar->ReceivedDamage(Damage, ImpactPoint, DamageDirection);
-      } else if (CombatEnemy) {
+      ACombatBase *CombatBase = GetCombatBaseFromActorInfo();
+      if (CombatBase) {
+        CombatBase->ReceivedDamage(Damage, ImpactPoint, DamageDirection);
 
-        // stop the attack montages to interrupt the attack
-        if (UAnimInstance *AnimInstance =
-                CombatEnemy->GetMesh()->GetAnimInstance()) {
-          AnimInstance->Montage_Stop(0.1f,
-                                     CombatEnemy->GetComboAttackMontage());
-          AnimInstance->Montage_Stop(0.1f,
-                                     CombatEnemy->GetChargedAttackMontage());
+        if (Cast<ACombatEnemy>(CombatBase)) {
+          // stop the attack montages to interrupt the attack
+          if (UAnimInstance *AnimInstance = Cast<ACombatEnemy>(CombatBase)
+                                                ->GetMesh()
+                                                ->GetAnimInstance()) {
+            AnimInstance->Montage_Stop(
+                0.1f, Cast<ACombatEnemy>(CombatBase)->GetComboAttackMontage());
+            AnimInstance->Montage_Stop(
+                0.1f,
+                Cast<ACombatEnemy>(CombatBase)->GetChargedAttackMontage());
+          }
         }
-        CombatEnemy->ReceivedDamage(Damage, ImpactPoint, DamageDirection);
       }
     }
 
@@ -158,21 +155,15 @@ void UCombatReceiveDamageAbility::ApplyDamageEffects(
     return;
   }
 
-  ACharacter *Character = Cast<ACharacter>(CurrentActorInfo->AvatarActor.Get());
+  ACombatBase *Character = GetCombatBaseFromActorInfo();
   if (!Character) {
     return;
   }
 
   // Apply knockbackbut keep the pelvis vertical
-  if (ACombatCharacter *CombatChar = Cast<ACombatCharacter>(Character)) {
-    CombatChar->GetMesh()->SetPhysicsBlendWeight(0.5f);
-    CombatChar->GetMesh()->SetBodySimulatePhysics(
-        CombatChar->GetPelvisBoneName(), false);
-  } else if (ACombatEnemy *CombatEnemy = Cast<ACombatEnemy>(Character)) {
-    CombatEnemy->GetMesh()->SetPhysicsBlendWeight(0.5f);
-    CombatEnemy->GetMesh()->SetBodySimulatePhysics(
-        CombatEnemy->GetPelvisBoneName(), false);
-  }
+  Character->GetMesh()->SetPhysicsBlendWeight(0.5f);
+  Character->GetMesh()->SetBodySimulatePhysics(Character->GetPelvisBoneName(),
+                                               false);
 
   // apply knockback impulse
   Character->GetCharacterMovement()->AddImpulse(DamageDirection, true);

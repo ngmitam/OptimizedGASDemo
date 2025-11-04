@@ -50,25 +50,16 @@ protected:
   UPROPERTY(EditDefaultsOnly, Category = "Charged Attack")
   FName ChargeAttackSection;
 
-  /** For AI: minimum charge loops */
-  UPROPERTY(EditDefaultsOnly, Category = "Charged Attack|AI",
-            meta = (ClampMin = 1, ClampMax = 20))
-  int32 MinChargeLoops = 2;
-
-  /** For AI: maximum charge loops */
-  UPROPERTY(EditDefaultsOnly, Category = "Charged Attack|AI",
-            meta = (ClampMin = 1, ClampMax = 20))
-  int32 MaxChargeLoops = 5;
-
-  /** Current charge loop count */
-  int32 CurrentChargeLoop = 0;
-
-  /** Target charge loops (for AI) */
-  int32 TargetChargeLoops = 0;
-
   /** Montage ended delegate */
   FOnMontageEnded MontageEndedDelegate;
 
   /** Whether this ability is controlled by player or AI */
   bool bIsPlayerControlled;
+
+private:
+  /** Current charge loop count (for AI) */
+  int32 CurrentChargeLoop = 0;
+
+  /** Target charge loops (for AI) */
+  int32 TargetChargeLoops = 0;
 };
