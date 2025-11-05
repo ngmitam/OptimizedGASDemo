@@ -9,10 +9,10 @@
 #include "CombatAttacker.h"
 #include "CombatDamageable.h"
 #include "Animation/AnimInstance.h"
-#include "Components/Health/CombatHealthComponent.h"
-#include "Gameplay/Attributes/CombatAttributeSet.h"
-#include "Gameplay/Data/CombatPawnData.h"
-#include "Gameplay/Data/CombatDamageEventData.h"
+#include "Health/CombatHealthComponent.h"
+#include "Attributes/CombatAttributeSet.h"
+#include "Data/CombatPawnData.h"
+#include "Data/CombatDamageEventData.h"
 #include "CombatBase.generated.h"
 
 class UWidgetComponent;

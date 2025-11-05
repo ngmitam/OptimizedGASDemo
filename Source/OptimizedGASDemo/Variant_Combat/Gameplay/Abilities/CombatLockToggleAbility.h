@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Gameplay/Abilities/CombatGameplayAbility.h"
+#include "Abilities/CombatGameplayAbility.h"
 #include "CombatLockToggleAbility.generated.h"
 
 /**

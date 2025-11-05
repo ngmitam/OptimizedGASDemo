@@ -7,9 +7,9 @@
 #include "AbilitySystemGlobals.h"
 #include "GameplayTagsManager.h"
 #include "Kismet/KismetSystemLibrary.h"
-#include "Gameplay/Effects/CombatDamageGameplayEffect.h"
-#include "Gameplay/Attributes/CombatAttributeSet.h"
-#include "Gameplay/Data/CombatAttackEventData.h"
+#include "Effects/CombatDamageGameplayEffect.h"
+#include "Attributes/CombatAttributeSet.h"
+#include "Data/CombatAttackEventData.h"
 
 UCombatTraceAttackAbility::UCombatTraceAttackAbility() {
   InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;

@@ -2,7 +2,7 @@
 
 #include "CombatLockToggleAbility.h"
 #include "CombatCharacter.h"
-#include "Components/LockSystem/CombatLockSystemComponent.h"
+#include "LockSystem/CombatLockSystemComponent.h"
 
 UCombatLockToggleAbility::UCombatLockToggleAbility() {
   InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;

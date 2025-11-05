@@ -5,12 +5,12 @@
 #include "AI/CombatEnemy.h"
 #include "Interfaces/CombatDamageable.h"
 #include "AbilitySystemComponent.h"
-#include "Gameplay/Attributes/CombatAttributeSet.h"
+#include "Attributes/CombatAttributeSet.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Camera/CameraShakeBase.h"
 #include "Kismet/GameplayStatics.h"
-#include "Gameplay/Effects/CombatDamageGameplayEffect.h"
+#include "Effects/CombatDamageGameplayEffect.h"
 
 UCombatReceiveDamageAbility::UCombatReceiveDamageAbility() {
   InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
