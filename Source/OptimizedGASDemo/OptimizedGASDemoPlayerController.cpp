@@ -1,5 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
+// Copyright Nguyen Minh Tam. All Rights Reserved.
 
 #include "OptimizedGASDemoPlayerController.h"
 #include "EnhancedInputSubsystems.h"
@@ -8,54 +7,60 @@
 #include "Blueprint/UserWidget.h"
 #include "OptimizedGASDemo.h"
 #include "Widgets/Input/SVirtualJoystick.h"
+#include "Kismet/KismetSystemLibrary.h"
 
-void AOptimizedGASDemoPlayerController::BeginPlay()
-{
-	Super::BeginPlay();
+void AOptimizedGASDemoPlayerController::BeginPlay() {
+  Super::BeginPlay();
 
-	// only spawn touch controls on local player controllers
-	if (SVirtualJoystick::ShouldDisplayTouchInterface() && IsLocalPlayerController())
-	{
-		// spawn the mobile controls widget
-		MobileControlsWidget = CreateWidget<UUserWidget>(this, MobileControlsWidgetClass);
+  // only spawn touch controls on local player controllers
+  if (SVirtualJoystick::ShouldDisplayTouchInterface() &&
+      IsLocalPlayerController()) {
+    // spawn the mobile controls widget
+    MobileControlsWidget =
+        CreateWidget<UUserWidget>(this, MobileControlsWidgetClass);
 
-		if (MobileControlsWidget)
-		{
-			// add the controls to the player screen
-			MobileControlsWidget->AddToPlayerScreen(0);
+    if (MobileControlsWidget) {
+      // add the controls to the player screen
+      MobileControlsWidget->AddToPlayerScreen(0);
 
-		} else {
+    } else {
 
-			UE_LOG(LogOptimizedGASDemo, Error, TEXT("Could not spawn mobile controls widget."));
-
-		}
-
-	}
+      UE_LOG(LogOptimizedGASDemo, Error,
+             TEXT("Could not spawn mobile controls widget."));
+    }
+  }
 }
 
-void AOptimizedGASDemoPlayerController::SetupInputComponent()
-{
-	Super::SetupInputComponent();
+void AOptimizedGASDemoPlayerController::SetupInputComponent() {
+  Super::SetupInputComponent();
 
-	// only add IMCs for local player controllers
-	if (IsLocalPlayerController())
-	{
-		// Add Input Mapping Contexts
-		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
-		{
-			for (UInputMappingContext* CurrentContext : DefaultMappingContexts)
-			{
-				Subsystem->AddMappingContext(CurrentContext, 0);
-			}
+  // only add IMCs for local player controllers
+  if (IsLocalPlayerController()) {
+    // Add Input Mapping Contexts
+    if (UEnhancedInputLocalPlayerSubsystem *Subsystem =
+            ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(
+                GetLocalPlayer())) {
+      for (UInputMappingContext *CurrentContext : DefaultMappingContexts) {
+        Subsystem->AddMappingContext(CurrentContext, 0);
+      }
 
-			// only add these IMCs if we're not using mobile touch input
-			if (!SVirtualJoystick::ShouldDisplayTouchInterface())
-			{
-				for (UInputMappingContext* CurrentContext : MobileExcludedMappingContexts)
-				{
-					Subsystem->AddMappingContext(CurrentContext, 0);
-				}
-			}
-		}
-	}
+      // only add these IMCs if we're not using mobile touch input
+      if (!SVirtualJoystick::ShouldDisplayTouchInterface()) {
+        for (UInputMappingContext *CurrentContext :
+             MobileExcludedMappingContexts) {
+          Subsystem->AddMappingContext(CurrentContext, 0);
+        }
+      }
+    }
+  }
+
+  // Bind Escape key to quit game
+  if (InputComponent) {
+    InputComponent->BindKey(EKeys::Escape, IE_Pressed, this,
+                            &AOptimizedGASDemoPlayerController::QuitGame);
+  }
+}
+
+void AOptimizedGASDemoPlayerController::QuitGame() {
+  UKismetSystemLibrary::QuitGame(this, nullptr, EQuitPreference::Quit, false);
 }

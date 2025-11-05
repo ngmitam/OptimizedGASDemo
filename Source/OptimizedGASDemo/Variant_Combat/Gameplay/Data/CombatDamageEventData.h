@@ -4,10 +4,10 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
-#include "DamageEventData.generated.h"
+#include "CombatDamageEventData.generated.h"
 
 UCLASS()
-class UDamageEventData : public UObject {
+class UCombatDamageEventData : public UObject {
   GENERATED_BODY()
 public:
   FVector Location;

@@ -9,11 +9,11 @@
 #include "CombatAttacker.h"
 #include "CombatDamageable.h"
 #include "Animation/AnimInstance.h"
-#include "HealthComponent.h"
+#include "Components/Health/CombatHealthComponent.h"
 #include "Gameplay/Attributes/CombatAttributeSet.h"
 #include "Gameplay/Data/CombatPawnData.h"
 #include "EnhancedInputComponent.h"
-#include "Gameplay/Data/DamageEventData.h"
+#include "Gameplay/Data/CombatDamageEventData.h"
 #include "GameFramework/Character.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -26,6 +26,7 @@
 #include "Gameplay/Abilities/CombatChargedAttackAbility.h"
 #include "Gameplay/Abilities/CombatComboAttackAbility.h"
 #include "Gameplay/Abilities/CombatNotifyEnemiesAbility.h"
+#include "Components/LockSystem/CombatLockSystemComponent.h"
 #include "CombatCharacter.generated.h"
 
 /**
@@ -49,6 +50,11 @@ class ACombatCharacter : public ACombatBase {
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
             meta = (AllowPrivateAccess = "true"))
   UCameraComponent *FollowCamera;
+
+  /** Lock system component */
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
+            meta = (AllowPrivateAccess = "true"))
+  UCombatLockSystemComponent *LockSystemComponent;
 
 protected:
   /** Jump Input Action */
@@ -78,6 +84,10 @@ protected:
   /** Toggle Camera Side Input Action */
   UPROPERTY(EditAnywhere, Category = "Input")
   UInputAction *ToggleCameraAction;
+
+  /** Lock Target Input Action */
+  UPROPERTY(EditAnywhere, Category = "Input")
+  UInputAction *LockAction;
 
   /** Life bar widget fill color */
   UPROPERTY(EditAnywhere, Category = "Damage")
@@ -185,6 +195,12 @@ protected:
   /** Called for toggle camera side input */
   void ToggleCamera();
 
+  /** Called for lock target input */
+  void LockPressed();
+
+  /** Update camera lock to target */
+  void UpdateCameraLock(float DeltaTime);
+
   /** BP hook to animate the camera side switch */
   UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
   void BP_ToggleCamera();
@@ -254,9 +270,15 @@ public:
     return FollowCamera;
   }
 
-  /** Called when HealthComponent health changes */
-  void OnHealthComponentChanged(float NewHealth);
+  /** Tick function */
+  virtual void Tick(float DeltaTime) override;
 
-  /** Called when HealthComponent max health changes */
-  void OnMaxHealthComponentChanged(float NewMaxHealth);
+  /** Lock onto a target */
+  void LockOntoTarget();
+
+  /** Unlock the current target */
+  void UnlockTarget();
+
+  /** Check if has a locked target */
+  bool HasLockedTarget() const;
 };

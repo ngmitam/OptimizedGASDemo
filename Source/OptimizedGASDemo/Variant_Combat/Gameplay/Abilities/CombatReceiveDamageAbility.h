@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "CombatGameplayAbility.h"
-#include "Gameplay/Data/DamageEventData.h"
+#include "Gameplay/Data/CombatDamageEventData.h"
 #include "CombatReceiveDamageAbility.generated.h"
 
 /**

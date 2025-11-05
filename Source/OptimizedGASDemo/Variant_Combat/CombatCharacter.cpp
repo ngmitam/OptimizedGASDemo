@@ -23,10 +23,9 @@
 #include "Gameplay/Abilities/CombatChargedAttackAbility.h"
 #include "Gameplay/Abilities/CombatComboAttackAbility.h"
 #include "Gameplay/Abilities/CombatNotifyEnemiesAbility.h"
+#include "Gameplay/Abilities/CombatLockToggleAbility.h"
 #include "Gameplay/Effects/CombatDamageGameplayEffect.h"
-#include "Gameplay/Data/AttackEventData.h"
-
-/** Constructor */
+#include "Gameplay/Data/CombatAttackEventData.h"
 ACombatCharacter::ACombatCharacter() {
   PrimaryActorTick.bCanEverTick = true;
 
@@ -59,7 +58,7 @@ ACombatCharacter::ACombatCharacter() {
 
   // create the health component
   HealthComponent =
-      CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
+      CreateDefaultSubobject<UCombatHealthComponent>(TEXT("HealthComponent"));
 
   // create the ability system component
   AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(
@@ -87,7 +86,12 @@ ACombatCharacter::ACombatCharacter() {
     PawnData->GrantedAbilities.Add(UCombatTraceAttackAbility::StaticClass());
     PawnData->GrantedAbilities.Add(UCombatChargedAttackAbility::StaticClass());
     PawnData->GrantedAbilities.Add(UCombatComboAttackAbility::StaticClass());
+    PawnData->GrantedAbilities.Add(UCombatLockToggleAbility::StaticClass());
   }
+
+  // create the lock system component
+  LockSystemComponent = CreateDefaultSubobject<UCombatLockSystemComponent>(
+      TEXT("LockSystemComponent"));
 
   // set the player tag
   Tags.Add(FName("Player"));
@@ -126,6 +130,51 @@ void ACombatCharacter::ChargedAttackReleased() {
 void ACombatCharacter::ToggleCamera() {
   // call the BP hook
   BP_ToggleCamera();
+}
+
+void ACombatCharacter::LockPressed() {
+  // Send gameplay event to toggle lock
+  SendGameplayEvent(
+      FGameplayTag::RequestGameplayTag(FName("Event.Lock.Toggle")));
+}
+
+void ACombatCharacter::UpdateCameraLock(float DeltaTime) {
+  if (LockSystemComponent && LockSystemComponent->HasLockedTarget()) {
+    AActor *Target = LockSystemComponent->GetLockedTarget();
+    if (Target && CameraBoom) {
+      FVector CameraLocation = CameraBoom->GetComponentLocation();
+      FVector TargetLocation = Target->GetActorLocation();
+      FRotator LookAtRotation = (TargetLocation - CameraLocation).Rotation();
+      CameraBoom->SetWorldRotation(LookAtRotation);
+
+      // Make the character face the target for movement
+      if (GetController()) {
+        FRotator CharacterRotation =
+            (TargetLocation - GetActorLocation()).Rotation();
+        CharacterRotation.Pitch = 0.0f; // Keep the character level
+        GetController()->SetControlRotation(CharacterRotation);
+      }
+    }
+
+    // Check if target is still valid, if not, unlock
+    if (!LockSystemComponent->IsTargetStillValid()) {
+      LockSystemComponent->UnlockTarget();
+      // Re-enable pawn control rotation
+      if (CameraBoom) {
+        CameraBoom->bUsePawnControlRotation = true;
+      }
+      // Remove locked state tag
+      if (AbilitySystemComponent) {
+        AbilitySystemComponent->RemoveLooseGameplayTag(
+            FGameplayTag::RequestGameplayTag(FName("State.Locked")));
+      }
+    }
+  }
+}
+
+void ACombatCharacter::Tick(float DeltaTime) {
+  Super::Tick(DeltaTime);
+  UpdateCameraLock(DeltaTime);
 }
 
 void ACombatCharacter::DoMove(float Right, float Forward) {
@@ -213,7 +262,8 @@ void ACombatCharacter::Landed(const FHitResult &Hit) {
   Super::Landed(Hit);
 
   // is the character still alive?
-  if (HealthComponent && !HealthComponent->IsDead()) {
+  UCombatHealthComponent *HealthComp = GetHealthComponent();
+  if (HealthComp && !HealthComp->IsDead()) {
     // disable ragdoll physics
     GetMesh()->SetPhysicsBlendWeight(0.0f);
   }
@@ -282,6 +332,10 @@ void ACombatCharacter::SetupPlayerInputComponent(
     EnhancedInputComponent->BindAction(ToggleCameraAction,
                                        ETriggerEvent::Triggered, this,
                                        &ACombatCharacter::ToggleCamera);
+
+    // Lock Target
+    EnhancedInputComponent->BindAction(LockAction, ETriggerEvent::Triggered,
+                                       this, &ACombatCharacter::LockPressed);
   }
 }
 
@@ -300,4 +354,20 @@ void ACombatCharacter::RespawnCharacter() {
   Destroy();
 
   // The PlayerController will handle spawning a new one
+}
+
+void ACombatCharacter::LockOntoTarget() {
+  if (LockSystemComponent) {
+    LockSystemComponent->LockOntoTarget();
+  }
+}
+
+void ACombatCharacter::UnlockTarget() {
+  if (LockSystemComponent) {
+    LockSystemComponent->UnlockTarget();
+  }
+}
+
+bool ACombatCharacter::HasLockedTarget() const {
+  return LockSystemComponent && LockSystemComponent->HasLockedTarget();
 }

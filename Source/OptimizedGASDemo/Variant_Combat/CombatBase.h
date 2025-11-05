@@ -9,10 +9,10 @@
 #include "CombatAttacker.h"
 #include "CombatDamageable.h"
 #include "Animation/AnimInstance.h"
-#include "HealthComponent.h"
+#include "Components/Health/CombatHealthComponent.h"
 #include "Gameplay/Attributes/CombatAttributeSet.h"
 #include "Gameplay/Data/CombatPawnData.h"
-#include "Gameplay/Data/DamageEventData.h"
+#include "Gameplay/Data/CombatDamageEventData.h"
 #include "CombatBase.generated.h"
 
 class UWidgetComponent;
@@ -38,7 +38,7 @@ protected:
   /** Health component for managing health */
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
             meta = (AllowPrivateAccess = "true"))
-  UHealthComponent *HealthComponent;
+  UCombatHealthComponent *HealthComponent;
 
   /** The ability system component for this character */
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
@@ -221,6 +221,12 @@ public:
 
   /** Returns the last game time we were attacked */
   float GetLastDangerTime() const { return LastDangerTime; }
+
+  /** Get current HP */
+  float GetCurrentHP() const { return CurrentHP; }
+
+  /** Get health component */
+  UCombatHealthComponent *GetHealthComponent() const { return HealthComponent; }
 
   /** Set attacking flag */
   void SetIsAttacking(bool bAttacking) { bIsAttacking = bAttacking; }

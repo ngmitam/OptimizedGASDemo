@@ -4,17 +4,17 @@
 
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
-#include "AttackEventData.generated.h"
+#include "CombatAttackEventData.generated.h"
 
 /**
  * Data structure for attack event information
  */
 UCLASS()
-class UAttackEventData : public UObject {
+class UCombatAttackEventData : public UObject {
   GENERATED_BODY()
 
 public:
-  UAttackEventData() {}
+  UCombatAttackEventData() {}
 
   /** The bone name used as the source of the attack damage */
   UPROPERTY()

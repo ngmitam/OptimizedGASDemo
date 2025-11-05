@@ -15,8 +15,8 @@
 #include "Gameplay/Abilities/CombatComboAttackAbility.h"
 #include "Gameplay/Abilities/CombatNotifyEnemiesAbility.h"
 #include "Gameplay/Effects/CombatDamageGameplayEffect.h"
-#include "Gameplay/Data/AttackEventData.h"
-#include "Gameplay/Data/DamageEventData.h"
+#include "Gameplay/Data/CombatAttackEventData.h"
+#include "Gameplay/Data/CombatDamageEventData.h"
 #include "UI/CombatLifeBar.h"
 
 ACombatBase::ACombatBase() {
@@ -32,7 +32,7 @@ UAbilitySystemComponent *ACombatBase::GetAbilitySystemComponent() const {
 
 void ACombatBase::DoAttackTrace(FName DamageSourceBone) {
   // Create attack event data with damage source bone
-  UAttackEventData *AttackData = NewObject<UAttackEventData>(this);
+  UCombatAttackEventData *AttackData = NewObject<UCombatAttackEventData>(this);
   AttackData->DamageSourceBone = DamageSourceBone;
 
   SendGameplayEvent(
@@ -58,7 +58,7 @@ void ACombatBase::CheckChargedAttack() {
 void ACombatBase::ApplyDamage(float Damage, AActor *DamageCauser,
                               const FVector &DamageLocation,
                               const FVector &DamageImpulse) {
-  UDamageEventData *DamageData = NewObject<UDamageEventData>();
+  UCombatDamageEventData *DamageData = NewObject<UCombatDamageEventData>();
   DamageData->Location = DamageLocation;
   DamageData->Impulse = DamageImpulse;
 
@@ -113,8 +113,6 @@ void ACombatBase::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 
 void ACombatBase::InitializeAbilitySystemComponents() {
   if (!AbilitySystemComponent) {
-    UE_LOG(LogTemp, Warning,
-           TEXT("ACombatBase: AbilitySystemComponent is null"));
     return;
   }
 
@@ -124,8 +122,6 @@ void ACombatBase::InitializeAbilitySystemComponents() {
   if (UAbilitySystemComponent *ASC = GetAbilitySystemComponent()) {
     if (HealthComponent) {
       HealthComponent->InitializeWithAbilitySystem(ASC);
-    } else {
-      UE_LOG(LogTemp, Warning, TEXT("ACombatBase: HealthComponent is null"));
     }
   }
 
@@ -140,13 +136,10 @@ void ACombatBase::InitializeAbilitySystemComponents() {
 
 void ACombatBase::InitializePawnData() {
   if (!PawnData) {
-    UE_LOG(LogTemp, Warning, TEXT("ACombatBase: PawnData is null"));
     return;
   }
 
   if (!AbilitySystemComponent) {
-    UE_LOG(LogTemp, Warning,
-           TEXT("ACombatBase: AbilitySystemComponent is null"));
     return;
   }
 
@@ -172,10 +165,6 @@ void ACombatBase::InitializePawnData() {
       if (EffectSpecHandle.IsValid()) {
         AbilitySystemComponent->ApplyGameplayEffectSpecToTarget(
             *EffectSpecHandle.Data.Get(), AbilitySystemComponent);
-      } else {
-        UE_LOG(LogTemp, Warning,
-               TEXT("ACombatBase: Failed to create effect spec for %s"),
-               *EffectClass->GetName());
       }
     }
   }
@@ -199,24 +188,27 @@ void ACombatBase::SendGameplayEvent(FGameplayTag EventTag, float EventMagnitude,
 
 void ACombatBase::OnHealthComponentChanged(float NewHealth) {
   CurrentHP = NewHealth;
-  if (LifeBarWidget) {
+  if (LifeBarWidget && HealthComponent) {
     float MaxHealth = HealthComponent->GetMaxHealth();
-    LifeBarWidget->SetLifePercentage(CurrentHP / MaxHealth);
+    float Percentage = CurrentHP / MaxHealth;
+    LifeBarWidget->SetLifePercentage(Percentage);
   }
 }
 
 void ACombatBase::OnMaxHealthComponentChanged(float NewMaxHealth) {
   MaxHP = NewMaxHealth;
-  if (LifeBarWidget) {
+  if (LifeBarWidget && HealthComponent) {
     LifeBarWidget->SetLifePercentage(CurrentHP / MaxHP);
   }
 }
 
 void ACombatBase::ResetHP() {
   if (UAbilitySystemComponent *ASC = GetAbilitySystemComponent()) {
-    float MaxHealth = HealthComponent->GetMaxHealth();
-    ASC->SetNumericAttributeBase(UCombatAttributeSet::GetHealthAttribute(),
-                                 MaxHealth);
+    if (HealthComponent) {
+      float MaxHealth = HealthComponent->GetMaxHealth();
+      ASC->SetNumericAttributeBase(UCombatAttributeSet::GetHealthAttribute(),
+                                   MaxHealth);
+    }
   }
 
   // update the life bar

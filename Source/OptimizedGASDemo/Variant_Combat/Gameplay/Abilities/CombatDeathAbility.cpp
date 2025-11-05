@@ -18,6 +18,10 @@ UCombatDeathAbility::UCombatDeathAbility() {
       FGameplayTag::RequestGameplayTag(FName("Ability.Type.Death")));
   SetAssetTags(AssetTags);
 
+  // Add state tag while active
+  ActivationOwnedTags.AddTag(
+      FGameplayTag::RequestGameplayTag(FName("State.Dead")));
+
   // Block all abilities while dead
   BlockAbilitiesWithTag.AddTag(
       FGameplayTag::RequestGameplayTag(FName("Ability")));

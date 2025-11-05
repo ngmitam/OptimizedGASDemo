@@ -16,6 +16,10 @@ UCombatComboAttackAbility::UCombatComboAttackAbility() {
       FGameplayTag::RequestGameplayTag(FName("Ability.Type.Attack.Combo")));
   SetAssetTags(AssetTags);
 
+  // Add state tag while active
+  ActivationOwnedTags.AddTag(
+      FGameplayTag::RequestGameplayTag(FName("State.Attacking")));
+
   // Block other attack abilities while this is active
   BlockAbilitiesWithTag.AddTag(
       FGameplayTag::RequestGameplayTag(FName("Ability.Type.Attack")));

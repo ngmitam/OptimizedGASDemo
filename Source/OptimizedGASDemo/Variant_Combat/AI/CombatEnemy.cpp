@@ -20,8 +20,9 @@
 #include "Gameplay/Abilities/CombatChargedAttackAbility.h"
 #include "Gameplay/Abilities/CombatComboAttackAbility.h"
 #include "Gameplay/Abilities/CombatNotifyEnemiesAbility.h"
+#include "Gameplay/Abilities/CombatLockableAbility.h"
 #include "Gameplay/Effects/CombatDamageGameplayEffect.h"
-#include "Gameplay/Data/AttackEventData.h"
+#include "Gameplay/Data/CombatAttackEventData.h"
 
 /** Constructor */
 ACombatEnemy::ACombatEnemy() {
@@ -36,7 +37,7 @@ ACombatEnemy::ACombatEnemy() {
 
   // create the health component
   HealthComponent =
-      CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
+      CreateDefaultSubobject<UCombatHealthComponent>(TEXT("HealthComponent"));
 
   // create the ability system component
   AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(
@@ -64,6 +65,7 @@ ACombatEnemy::ACombatEnemy() {
     PawnData->GrantedAbilities.Add(UCombatTraceAttackAbility::StaticClass());
     PawnData->GrantedAbilities.Add(UCombatChargedAttackAbility::StaticClass());
     PawnData->GrantedAbilities.Add(UCombatComboAttackAbility::StaticClass());
+    PawnData->GrantedAbilities.Add(UCombatLockableAbility::StaticClass());
   }
 
   // set the AI Controller class by default

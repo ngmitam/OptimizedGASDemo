@@ -9,7 +9,7 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "Gameplay/Effects/CombatDamageGameplayEffect.h"
 #include "Gameplay/Attributes/CombatAttributeSet.h"
-#include "Gameplay/Data/AttackEventData.h"
+#include "Gameplay/Data/CombatAttackEventData.h"
 
 UCombatTraceAttackAbility::UCombatTraceAttackAbility() {
   InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
@@ -20,6 +20,10 @@ UCombatTraceAttackAbility::UCombatTraceAttackAbility() {
   AssetTags.AddTag(
       FGameplayTag::RequestGameplayTag(FName("Ability.Type.Trace.Attack")));
   SetAssetTags(AssetTags);
+
+  // Add state tag while active
+  ActivationOwnedTags.AddTag(
+      FGameplayTag::RequestGameplayTag(FName("State.Attacking")));
 
   // Cancel this ability if death occurs
   CancelAbilitiesWithTag.AddTag(
@@ -100,8 +104,8 @@ void UCombatTraceAttackAbility::PerformAttackTrace() {
   // Get damage source bone from event data if available
   FName DamageSourceBone = FName("hand_r"); // default
   if (CachedTriggerEventData && CachedTriggerEventData->OptionalObject) {
-    if (const UAttackEventData *AttackData =
-            Cast<UAttackEventData>(CachedTriggerEventData->OptionalObject)) {
+    if (const UCombatAttackEventData *AttackData = Cast<UCombatAttackEventData>(
+            CachedTriggerEventData->OptionalObject)) {
       DamageSourceBone = AttackData->DamageSourceBone;
     }
   }

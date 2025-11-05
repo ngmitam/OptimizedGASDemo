@@ -5,7 +5,7 @@
 #include "CoreMinimal.h"
 #include "Components/GameFrameworkComponent.h"
 #include "AttributeSet.h"
-#include "HealthComponent.generated.h"
+#include "CombatHealthComponent.generated.h"
 
 class UAbilitySystemComponent;
 struct FOnAttributeChangeData;
@@ -19,11 +19,11 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FHealth_MaxHealthChanged, float);
  * Follows Lyra's HealthComponent pattern.
  */
 UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
-class UHealthComponent : public UGameFrameworkComponent {
+class UCombatHealthComponent : public UGameFrameworkComponent {
   GENERATED_BODY()
 
 public:
-  UHealthComponent(const FObjectInitializer &ObjectInitializer);
+  UCombatHealthComponent(const FObjectInitializer &ObjectInitializer);
 
   //~UGameFrameworkComponent interface
   virtual void OnRegister() override;

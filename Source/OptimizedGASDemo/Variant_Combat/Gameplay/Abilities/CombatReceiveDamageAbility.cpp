@@ -26,6 +26,10 @@ UCombatReceiveDamageAbility::UCombatReceiveDamageAbility() {
   BlockAbilitiesWithTag.AddTag(
       FGameplayTag::RequestGameplayTag(FName("Ability.Attack")));
 
+  // Add state tag while active
+  ActivationOwnedTags.AddTag(
+      FGameplayTag::RequestGameplayTag(FName("State.Damaged")));
+
   // Add trigger to activate on damage received event
   FAbilityTriggerData TriggerData;
   TriggerData.TriggerTag =
@@ -43,7 +47,6 @@ void UCombatReceiveDamageAbility::ActivateAbility(
     const FGameplayAbilityActivationInfo ActivationInfo,
     const FGameplayEventData *TriggerEventData) {
   Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
-
   if (!CommitAbility(Handle, ActorInfo, ActivationInfo)) {
     EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
     return;
@@ -54,8 +57,8 @@ void UCombatReceiveDamageAbility::ActivateAbility(
   FVector ImpactPoint = FVector::ZeroVector;
   FVector DamageDirection = FVector::ZeroVector;
   if (TriggerEventData) {
-    const UDamageEventData *DamageData =
-        Cast<UDamageEventData>(TriggerEventData->OptionalObject);
+    const UCombatDamageEventData *DamageData =
+        Cast<UCombatDamageEventData>(TriggerEventData->OptionalObject);
     if (DamageData) {
       ImpactPoint = DamageData->Location;
       DamageDirection = DamageData->Impulse;
@@ -160,7 +163,7 @@ void UCombatReceiveDamageAbility::ApplyDamageEffects(
     return;
   }
 
-  // Apply knockbackbut keep the pelvis vertical
+  // Apply knockback but keep the pelvis vertical
   Character->GetMesh()->SetPhysicsBlendWeight(0.5f);
   Character->GetMesh()->SetBodySimulatePhysics(Character->GetPelvisBoneName(),
                                                false);

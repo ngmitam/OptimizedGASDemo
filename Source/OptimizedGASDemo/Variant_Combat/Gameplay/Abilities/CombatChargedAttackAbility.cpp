@@ -15,6 +15,10 @@ UCombatChargedAttackAbility::UCombatChargedAttackAbility() {
       FGameplayTag::RequestGameplayTag(FName("Ability.Type.Attack.Charged")));
   SetAssetTags(AssetTags);
 
+  // Add state tag while active
+  ActivationOwnedTags.AddTag(
+      FGameplayTag::RequestGameplayTag(FName("State.Attacking")));
+
   // Block other attack abilities while charging
   BlockAbilitiesWithTag.AddTag(
       FGameplayTag::RequestGameplayTag(FName("Ability.Type.Attack")));
