@@ -4,11 +4,8 @@
 #include "GameFramework/Actor.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameplayTagsManager.h"
+#include "AbilitySystemComponent.h"
 #include "DrawDebugHelpers.h"
-
-// Define the lockable tag
-static FGameplayTag LockableTag =
-    FGameplayTag::RequestGameplayTag(FName("State.Lockable"));
 
 UCombatLockSystemComponent::UCombatLockSystemComponent() {
   PrimaryComponentTick.bCanEverTick = true;
@@ -17,7 +14,7 @@ UCombatLockSystemComponent::UCombatLockSystemComponent() {
 void UCombatLockSystemComponent::BeginPlay() { Super::BeginPlay(); }
 
 void UCombatLockSystemComponent::LockOntoTarget() {
-  AActor *Owner = Cast<AActor>(GetOuter());
+  AActor *Owner = GetOwner();
   if (!Owner) {
     return;
   }
@@ -48,6 +45,7 @@ void UCombatLockSystemComponent::LockOntoTarget() {
   AActor *BestTarget = nullptr;
   float BestScore = 0.0f; // Lower score is better (distance-based)
 
+  // Evaluate hit results to find the best valid target (closest within cone)
   for (const FHitResult &Hit : HitResults) {
     AActor *HitActor = Hit.GetActor();
     if (!HitActor || HitActor == Owner) {
@@ -62,7 +60,8 @@ void UCombatLockSystemComponent::LockOntoTarget() {
 
     // Check if has lockable tag
     UAbilitySystemComponent *ASC = Enemy->GetAbilitySystemComponent();
-    if (!ASC || !ASC->HasMatchingGameplayTag(LockableTag)) {
+    if (!ASC || !ASC->HasMatchingGameplayTag(FGameplayTag::RequestGameplayTag(
+                    FName("State.Lockable")))) {
       continue;
     }
 
@@ -110,7 +109,8 @@ void UCombatLockSystemComponent::LockOntoTarget() {
 
     // Check if has lockable tag
     UAbilitySystemComponent *ASC = Enemy->GetAbilitySystemComponent();
-    if (!ASC || !ASC->HasMatchingGameplayTag(LockableTag)) {
+    if (!ASC || !ASC->HasMatchingGameplayTag(FGameplayTag::RequestGameplayTag(
+                    FName("State.Lockable")))) {
       continue;
     }
 
@@ -165,7 +165,7 @@ bool UCombatLockSystemComponent::IsTargetStillValid() const {
     return false;
   }
 
-  AActor *Owner = Cast<AActor>(GetOuter());
+  AActor *Owner = GetOwner();
   if (!Owner) {
     return false;
   }
@@ -177,7 +177,8 @@ bool UCombatLockSystemComponent::IsTargetStillValid() const {
   }
 
   UAbilitySystemComponent *ASC = Enemy->GetAbilitySystemComponent();
-  if (!ASC || !ASC->HasMatchingGameplayTag(LockableTag)) {
+  if (!ASC || !ASC->HasMatchingGameplayTag(
+                  FGameplayTag::RequestGameplayTag(FName("State.Lockable")))) {
     return false;
   }
 
@@ -223,7 +224,7 @@ void UCombatLockSystemComponent::DrawDebugTrace(
                 2.0f);
 
   // Draw cone angle visualization
-  AActor *Owner = Cast<AActor>(GetOuter());
+  AActor *Owner = GetOwner();
   if (Owner) {
     FVector OwnerForward = Owner->GetActorForwardVector();
     FVector ConeLeft =
@@ -252,7 +253,9 @@ void UCombatLockSystemComponent::DrawDebugTrace(
       ACombatEnemy *Enemy = Cast<ACombatEnemy>(HitActor);
       if (Enemy) {
         UAbilitySystemComponent *ASC = Enemy->GetAbilitySystemComponent();
-        if (ASC && ASC->HasMatchingGameplayTag(LockableTag) &&
+        if (ASC &&
+            ASC->HasMatchingGameplayTag(
+                FGameplayTag::RequestGameplayTag(FName("State.Lockable"))) &&
             Enemy->GetCurrentHP() > 0) {
           HitColor = FColor::Green; // Valid target
         } else {

@@ -2,82 +2,83 @@
 
 ## Overview
 
-OptimizedGASDemo is an Unreal Engine project created from the Third Person C++ template, focused on implementing and optimizing the Gameplay Ability System (GAS) inspired by the Lyra project. This project serves as a challenge to research and apply GAS effectively for character abilities, damage/attribute systems, and core combat mechanics. The goal is to create an extensible framework for advanced gameplay features while optimizing performance for smooth, realistic interactions.
+OptimizedGASDemo is an Unreal Engine project created from the Third Person C++ template focused on implementing and optimizing the Gameplay Ability System (GAS) (inspired by Lyra). The goal is an extensible, performant framework for abilities, attributes, and combat mechanics.
 
-## Features
+## Table of Contents
 
-### Gameplay Ability System (GAS) (In Development)
+-   Overview
+-   Quick setup
+-   Running the editor
+-   Where to look in the code
+-   Gameplay Ability System (GAS) in this project
+-   Quick tips for editing/extending GAS
+-   Contributing, References, Contact, License
 
--   Deep research and implementation of GAS based on Lyra.
--   Optimized and extensible design for Character Abilities and Damage/Attribute System.
--   Seamless integration with Unreal Engine's GAS framework.
+## Project summary
 
-### Character Experience (In Development)
+A small Unreal Engine 5.7 C++ project (Third Person template) exploring a performant implementation of the Gameplay Ability System (GAS). The repository contains a modular GAS-based combat system (attributes, abilities, damage tracing, and supporting components) organized into gameplay variants (Combat, Platforming, SideScrolling).
 
--   Enhanced Character Control for smooth and realistic third-person gameplay.
--   Improvements to address limitations, ensuring fluid movement and interaction.
+### Key points
 
-### Core Combat System (In Development)
+-   Engine: Unreal Engine 5.7 (see `OptimizedGASDemo.uproject`)
+-   Language: C++ with Blueprint integrations
+-   Primary focus: Gameplay Ability System, AttributeSets, and optimized combat mechanics
 
--   Effective Weapon Tracing implementation.
--   Damage calculation system powered by GAS for accurate and dynamic combat.
+### Features
 
-### Nice to Have (Target Lock System) (In Development)
+-   Modular GAS foundation and AttributeSets (see `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Attributes`)
+-   Example combat abilities and damage/event data
+-   Variant combat setups
 
--   Lock Camera (Target Lock System) for improved targeting and combat engagement.
+## Quick setup (local)
 
-## Roadmap
+1. Clone this repository.
+2. Open `OptimizedGASDemo.uproject` in Unreal Editor 5.7. If prompted, let the editor generate project files.
+3. Build from your IDE or use the provided build tasks in this workspace. Example command (from UE root):
 
--   **Phase 1: GAS Foundation** - Research and implement basic GAS setup inspired by Lyra, including core components and integration.
--   **Phase 2: Character Abilities and Attributes** - Develop extensible character abilities and damage/attribute systems using GAS.
--   **Phase 3: Combat Mechanics** - Implement weapon tracing and dynamic damage calculations for core combat.
--   **Phase 4: Enhancements** - Add target lock system, polish character controls, and optimize for smooth third-person gameplay.
+```powershell
+Engine\Build\BatchFiles\Build.bat OptimizedGASDemoEditor Win64 Development "${PWD}\OptimizedGASDemo.uproject" -waitmutex
+```
 
-## Requirements
+If you're using the workspace tasks, pick one of the existing tasks such as "OptimizedGASDemoEditor Win64 Development Build".
 
--   Unreal Engine 5.7 (or compatible version)
--   Windows 64-bit platform
--   Visual Studio 2022 (for C++ development)
+## Running the editor
 
-## Technologies Used
+-   After building, open the project with the editor (double-click the `.uproject` or use the Editor target). Play in Editor (PIE) to test sample levels and variants.
 
--   **Unreal Engine 5.7**: Core game engine for development.
--   **C++**: Primary programming language for performance-critical components.
--   **Blueprint**: Visual scripting for rapid prototyping and UI.
--   **Gameplay Ability System (GAS)**: Framework for abilities, attributes, and combat logic.
+## Where to look in the code
 
-## Setup and Installation
+-   Module entry: `Source/OptimizedGASDemo/OptimizedGASDemo.Build.cs`, `*.Target.cs`
+-   Gameplay Abilities and Attributes: `Source/OptimizedGASDemo/Variant_Combat/Gameplay`
+-   AttributeSet example: `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Attributes/CombatAttributeSet.*`
+-   Example character and controllers: `Source/OptimizedGASDemo/*Character*`, `*PlayerController*`, `*GameMode*`
 
-1. Clone or download the project to your local machine.
-2. Open the `OptimizedGASDemo.uproject` file with Unreal Engine 5.7.
-3. Build the project using the provided build tasks (e.g., "OptimizedGASDemoEditor Win64 Development Build").
-4. Launch the editor to explore and test the features.
+## Gameplay Ability System (GAS)
 
-## Usage
-
--   [ ] **Character Abilities**: Use GAS to define and trigger abilities for characters.
--   [ ] **Damage System**: Experience dynamic damage calculations during combat.
--   [ ] **Weapon Tracing**: Test effective weapon interactions in combat scenarios.
--   [ ] **Target Lock**: Enable and use the camera lock system for targeted gameplay.
-
-## References
-
-This project heavily references and applies the Gameplay Ability System from the [Lyra](https://docs.unrealengine.com/en-US/GameplayAbilitySystem/index.html) sample project provided by Epic Games.
+The full GAS walkthrough and implementation notes were moved to `docs/GAS_OVERVIEW.md` — see that file for key classes, usage examples, troubleshooting, and tips for extending GAS in this project.
 
 ## Contributing
 
-This is a challenge project. Feel free to fork and experiment with optimizations or extensions.
+-   This repo is intended for experimentation. Contributions are welcome via pull requests. Keep changes small and focused (feature or bugfix per PR). Document any architectural changes in the PR description.
+
+## References
+
+-   Unreal Engine Gameplay Ability System docs (Lyra): https://docs.unrealengine.com/en-US/GameplayAbilitySystem/index.html
 
 ## Contact
 
-**Nguyen Minh Tam**
-[LinkedIn](https://linkedin.com/in/ngmitam) | [GitHub](https://github.com/ngmitam)
-Email: ngmitamit@gmail.com
+-   Nguyen Minh Tam — GitHub: `ngmitam` (email in repository metadata)
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+-   MIT — see `LICENSE`
 
 ---
+
+## Notes
+
+-   The project enables the `GameplayAbilities` and `ModularGameplay` plugins in `OptimizedGASDemo.uproject`. Build settings and additional dependencies are declared in `Source/OptimizedGASDemo/OptimizedGASDemo.Build.cs`.
+
+If you'd like, I can also add a short troubleshooting section (common build errors and quick fixes) or expand the Usage section with examples for running specific variants or running automated tests (if any exist).
 
 _This project showcases professional game development practices and is part of my portfolio demonstrating Unreal Engine expertise._

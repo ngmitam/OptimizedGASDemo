@@ -24,7 +24,7 @@ UCombatReceiveDamageAbility::UCombatReceiveDamageAbility() {
 
   // Block attack abilities while receiving damage
   BlockAbilitiesWithTag.AddTag(
-      FGameplayTag::RequestGameplayTag(FName("Ability.Attack")));
+      FGameplayTag::RequestGameplayTag(FName("Ability.Type.Attack")));
 
   // Add state tag while active
   ActivationOwnedTags.AddTag(
