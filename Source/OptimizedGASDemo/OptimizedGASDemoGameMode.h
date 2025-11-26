@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// Copyright Nguyen Minh Tam. All Rights Reserved.
 
 #pragma once
 
@@ -10,15 +10,10 @@
  *  Simple GameMode for a third person game
  */
 UCLASS(abstract)
-class AOptimizedGASDemoGameMode : public AGameModeBase
-{
-	GENERATED_BODY()
+class AOptimizedGASDemoGameMode : public AGameModeBase {
+  GENERATED_BODY()
 
 public:
-	
-	/** Constructor */
-	AOptimizedGASDemoGameMode();
+  /** Constructor */
+  AOptimizedGASDemoGameMode();
 };
-
-
-

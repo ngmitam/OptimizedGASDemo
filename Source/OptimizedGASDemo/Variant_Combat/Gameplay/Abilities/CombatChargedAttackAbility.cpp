@@ -69,6 +69,22 @@ void UCombatChargedAttackAbility::ActivateAbility(
     // Set attacking flag
     CombatBase->SetIsAttacking(true);
 
+    // Enable root motion on skeletal mesh for attack movement
+    if (USkeletalMeshComponent *Mesh = CombatBase->GetMesh()) {
+      Mesh->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+      // Root motion will automatically drive movement during attacks
+    }
+
+    // Apply momentum preservation if character has stored velocity
+    if (ACombatCharacter *CombatChar = Cast<ACombatCharacter>(CombatBase)) {
+      if (!CombatChar->GetStoredVelocity().IsNearlyZero()) {
+        CombatBase->GetCharacterMovement()->AddImpulse(
+            CombatChar->GetStoredVelocity() *
+                CombatChar->GetAttackMomentumMultiplier(),
+            true);
+      }
+    }
+
     // Notify enemies of attack via ability
     if (UAbilitySystemComponent *ASC =
             GetAbilitySystemComponentFromActorInfo()) {

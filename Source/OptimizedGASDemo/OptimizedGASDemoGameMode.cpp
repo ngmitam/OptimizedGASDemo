@@ -1,8 +1,7 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// Copyright Nguyen Minh Tam. All Rights Reserved.
 
 #include "OptimizedGASDemoGameMode.h"
 
-AOptimizedGASDemoGameMode::AOptimizedGASDemoGameMode()
-{
-	// stub
+AOptimizedGASDemoGameMode::AOptimizedGASDemoGameMode() {
+  // stub
 }

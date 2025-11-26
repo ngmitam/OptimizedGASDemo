@@ -3,6 +3,7 @@
 #include "CombatComboAttackAbility.h"
 #include "AbilitySystemComponent.h"
 #include "CombatBase.h"
+#include "CombatCharacter.h"
 #include "Animation/AnimInstance.h"
 #include "GameplayTagsManager.h"
 
@@ -61,6 +62,23 @@ void UCombatComboAttackAbility::ActivateAbility(
 
     // Set attacking flag
     CombatBase->SetIsAttacking(true);
+
+    // Enable root motion on skeletal mesh for attack movement
+    if (USkeletalMeshComponent *Mesh = CombatBase->GetMesh()) {
+      Mesh->SetAnimationMode(EAnimationMode::AnimationBlueprint);
+      // Root motion will automatically drive movement during attacks
+    }
+
+    // Apply momentum preservation if character has stored velocity
+    if (ACombatCharacter *CombatChar = Cast<ACombatCharacter>(CombatBase)) {
+      if (!CombatChar->GetStoredVelocity().IsNearlyZero()) {
+        CombatBase->GetCharacterMovement()->AddImpulse(
+            CombatChar->GetStoredVelocity() *
+                CombatChar->GetAttackMomentumMultiplier(),
+            true);
+      }
+    }
+
     // Notify enemies of attack via ability
     if (UAbilitySystemComponent *ASC =
             GetAbilitySystemComponentFromActorInfo()) {
@@ -167,11 +185,21 @@ void UCombatComboAttackAbility::HandleComboNext(
       float CurrentTime = GetWorld()->GetTimeSeconds();
       if (CurrentTime - CombatBase->GetCachedComboAttackInputTime() >
           CombatBase->GetComboInputCacheTimeTolerance()) {
-        // Input is stale, end combo
-        bShouldContinueCombo = false;
+        // Input is stale, check for buffered input instead
+        ACombatCharacter *CombatChar = Cast<ACombatCharacter>(CombatBase);
+        if (CombatChar && CombatChar->HasBufferedAttack() &&
+            CombatChar->GetBufferedAttackType() == 1) { // Combo attack
+          // Use buffered input
+          CombatChar->ClearAttackBuffer();
+          bShouldContinueCombo = true;
+        } else {
+          // No valid input, end combo
+          bShouldContinueCombo = false;
+        }
       } else {
-        // Consume the input
+        // Consume the cached input
         CombatBase->SetCachedComboAttackInputTime(0.0f);
+        bShouldContinueCombo = true;
       }
     } else {
       // For AI, always continue until target combo count
@@ -197,7 +225,7 @@ void UCombatComboAttackAbility::HandleComboNext(
                  GetCurrentActivationInfo(), false, false);
     }
   } else {
-    // End combo due to stale input
+    // End combo due to no input
     EndAbility(CurrentSpecHandle, GetCurrentActorInfo(),
                GetCurrentActivationInfo(), false, false);
   }

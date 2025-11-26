@@ -36,7 +36,16 @@ ACombatCharacter::ACombatCharacter() {
   GetCapsuleComponent()->InitCapsuleSize(35.0f, 90.0f);
 
   // Configure character movement
-  GetCharacterMovement()->MaxWalkSpeed = 400.0f;
+  GetCharacterMovement()->MaxWalkSpeed =
+      600.0f; // Increased for better combat mobility
+  GetCharacterMovement()->MaxAcceleration = 2000.0f; // Faster acceleration
+  GetCharacterMovement()->GroundFriction = 8.0f;     // Better control
+  GetCharacterMovement()->BrakingFrictionFactor = 1.0f;
+  GetCharacterMovement()->bUseSeparateBrakingFriction = true;
+
+  // Enable root motion for attack animations
+  GetCharacterMovement()->bUseControllerDesiredRotation = true;
+  GetCharacterMovement()->bOrientRotationToMovement = false;
 
   // create the camera boom
   CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
@@ -99,10 +108,18 @@ ACombatCharacter::ACombatCharacter() {
 
 void ACombatCharacter::Move(const FInputActionValue &Value) {
   // input is a Vector2D
-  FVector2D MovementVector = Value.Get<FVector2D>();
+  FVector2D RawInput = Value.Get<FVector2D>();
+
+  // Apply deadzone
+  if (RawInput.Size() < InputDeadzone) {
+    RawInput = FVector2D::ZeroVector;
+  }
+
+  // Smooth input
+  SmoothedInput = FMath::Lerp(SmoothedInput, RawInput, InputSmoothingFactor);
 
   // route the input
-  DoMove(MovementVector.X, MovementVector.Y);
+  DoMove(SmoothedInput.X, SmoothedInput.Y);
 }
 
 void ACombatCharacter::Look(const FInputActionValue &Value) {
@@ -144,8 +161,26 @@ void ACombatCharacter::UpdateCameraLock(float DeltaTime) {
     if (Target && CameraBoom) {
       FVector CameraLocation = CameraBoom->GetComponentLocation();
       FVector TargetLocation = Target->GetActorLocation();
-      FRotator LookAtRotation = (TargetLocation - CameraLocation).Rotation();
-      CameraBoom->SetWorldRotation(LookAtRotation);
+      FRotator DesiredRotation = (TargetLocation - CameraLocation).Rotation();
+
+      // Dynamic camera distance based on combat state
+      float TargetDistance =
+          bIsAttacking ? CombatCameraDistance : ExplorationCameraDistance;
+      CameraBoom->TargetArmLength = FMath::FInterpTo(
+          CameraBoom->TargetArmLength, TargetDistance, DeltaTime, 5.0f);
+
+      // Smooth interpolation to target rotation
+      if (!bCameraLocked) {
+        // First time locking, snap to avoid delay
+        CameraBoom->SetWorldRotation(DesiredRotation);
+        bCameraLocked = true;
+      } else {
+        // Interpolate smoothly
+        FRotator CurrentRotation = CameraBoom->GetComponentRotation();
+        FRotator NewRotation = FMath::RInterpTo(
+            CurrentRotation, DesiredRotation, DeltaTime, CameraLockInterpSpeed);
+        CameraBoom->SetWorldRotation(NewRotation);
+      }
 
       // Make the character face the target for movement
       if (GetController()) {
@@ -159,6 +194,7 @@ void ACombatCharacter::UpdateCameraLock(float DeltaTime) {
     // Check if target is still valid, if not, unlock
     if (!LockSystemComponent->IsTargetStillValid()) {
       LockSystemComponent->UnlockTarget();
+      bCameraLocked = false;
       // Re-enable pawn control rotation
       if (CameraBoom) {
         CameraBoom->bUsePawnControlRotation = true;
@@ -169,7 +205,24 @@ void ACombatCharacter::UpdateCameraLock(float DeltaTime) {
             FGameplayTag::RequestGameplayTag(FName("State.Locked")));
       }
     }
+  } else {
+    bCameraLocked = false;
+    // Reset to exploration distance when not locked
+    if (CameraBoom) {
+      CameraBoom->TargetArmLength =
+          FMath::FInterpTo(CameraBoom->TargetArmLength,
+                           ExplorationCameraDistance, DeltaTime, 5.0f);
+    }
   }
+}
+
+void ACombatCharacter::AttackMontageEnded(UAnimMontage *Montage,
+                                          bool bInterrupted) {
+  // Call parent to reset attacking flag
+  Super::AttackMontageEnded(Montage, bInterrupted);
+
+  // Execute any buffered attack
+  ExecuteBufferedAttack();
 }
 
 void ACombatCharacter::Tick(float DeltaTime) {
@@ -206,16 +259,34 @@ void ACombatCharacter::DoLook(float Yaw, float Pitch) {
 }
 
 void ACombatCharacter::DoComboAttackStart() {
-  // are we already playing an attack animation?
-  if (bIsAttacking) {
-    // cache the input time so we can check it later
-    CachedComboAttackInputTime = GetWorld()->GetTimeSeconds();
-    return; // Don't start a new attack while already attacking
-  }
+  // Store current velocity for momentum preservation
+  StoredVelocity = GetVelocity();
 
-  // Send gameplay event to activate combo attack ability
-  SendGameplayEvent(
-      FGameplayTag::RequestGameplayTag(FName("Event.Attack.Combo.Start")));
+  // Cache the input time for combo system
+  SetCachedComboAttackInputTime(GetWorld()->GetTimeSeconds());
+
+  // Check if we can attack immediately
+  if (!bIsAttacking) {
+    // Send gameplay event to activate combo attack ability
+    SendGameplayEvent(
+        FGameplayTag::RequestGameplayTag(FName("Event.Attack.Combo.Start")));
+
+    // Add camera shake for feedback
+    if (AttackCameraShake) {
+      if (APlayerController *PC = Cast<APlayerController>(GetController())) {
+        if (PC->PlayerCameraManager) {
+          PC->PlayerCameraManager->StartCameraShake(AttackCameraShake);
+        }
+      }
+    }
+  } else {
+    // Buffer the attack input
+    bAttackBuffered = true;
+    BufferedAttackType = 1; // Combo
+    GetWorld()->GetTimerManager().SetTimer(AttackBufferTimer, this,
+                                           &ACombatCharacter::ClearAttackBuffer,
+                                           AttackBufferTime, false);
+  }
 }
 
 void ACombatCharacter::DoComboAttackEnd() {
@@ -223,18 +294,33 @@ void ACombatCharacter::DoComboAttackEnd() {
 }
 
 void ACombatCharacter::DoChargedAttackStart() {
+  // Store current velocity for momentum preservation
+  StoredVelocity = GetVelocity();
+
   // raise the charging attack flag
   bIsChargingAttack = true;
 
-  if (bIsAttacking) {
-    // cache the input time so we can check it later
-    CachedChargedAttackInputTime = GetWorld()->GetTimeSeconds();
-    return;
-  }
+  if (!bIsAttacking) {
+    // Send gameplay event to activate charged attack ability
+    SendGameplayEvent(
+        FGameplayTag::RequestGameplayTag(FName("Event.Attack.Charged.Start")));
 
-  // Send gameplay event to activate charged attack ability
-  SendGameplayEvent(
-      FGameplayTag::RequestGameplayTag(FName("Event.Attack.Charged.Start")));
+    // Add camera shake for feedback
+    if (AttackCameraShake) {
+      if (APlayerController *PC = Cast<APlayerController>(GetController())) {
+        if (PC->PlayerCameraManager) {
+          PC->PlayerCameraManager->StartCameraShake(AttackCameraShake);
+        }
+      }
+    }
+  } else {
+    // Buffer the attack input
+    bAttackBuffered = true;
+    BufferedAttackType = 2; // Charged
+    GetWorld()->GetTimerManager().SetTimer(AttackBufferTimer, this,
+                                           &ACombatCharacter::ClearAttackBuffer,
+                                           AttackBufferTime, false);
+  }
 }
 
 void ACombatCharacter::DoChargedAttackEnd() {
@@ -370,4 +456,24 @@ void ACombatCharacter::UnlockTarget() {
 
 bool ACombatCharacter::HasLockedTarget() const {
   return LockSystemComponent && LockSystemComponent->HasLockedTarget();
+}
+
+void ACombatCharacter::ClearAttackBuffer() {
+  bAttackBuffered = false;
+  BufferedAttackType = 0;
+}
+
+void ACombatCharacter::ExecuteBufferedAttack() {
+  if (bAttackBuffered && !bIsAttacking) {
+    if (BufferedAttackType == 1) {
+      // Execute buffered combo attack
+      SendGameplayEvent(
+          FGameplayTag::RequestGameplayTag(FName("Event.Attack.Combo.Start")));
+    } else if (BufferedAttackType == 2) {
+      // Execute buffered charged attack
+      SendGameplayEvent(FGameplayTag::RequestGameplayTag(
+          FName("Event.Attack.Charged.Start")));
+    }
+    ClearAttackBuffer();
+  }
 }

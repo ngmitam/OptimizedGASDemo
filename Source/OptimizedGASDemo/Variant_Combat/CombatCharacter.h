@@ -130,9 +130,59 @@ protected:
   /** Time at which a combo attack button was last pressed */
   float CachedComboAttackInputTime = 0.0f;
 
+  /** Attack buffer time in seconds */
+  UPROPERTY(EditAnywhere, Category = "Input|Combat")
+  float AttackBufferTime = 0.2f;
+
+  /** Timer handle for attack buffer */
+  FTimerHandle AttackBufferTimer;
+
+  /** Whether attack input is buffered */
+  bool bAttackBuffered = false;
+
+  /** Buffered attack type (0=none, 1=combo, 2=charged) */
+  int32 BufferedAttackType = 0;
+
+  /** Camera shake for attacks */
+  UPROPERTY(EditAnywhere, Category = "Feedback")
+  TSubclassOf<UCameraShakeBase> AttackCameraShake;
+
   /** Time at which a charged attack button was last pressed */
   float CachedChargedAttackInputTime = 0.0f;
 
+  /** Whether the camera is currently locked to a target */
+  bool bCameraLocked = false;
+
+  /** Interpolation speed for camera lock transitions */
+  float CameraLockInterpSpeed = 5.0f;
+
+  /** Stored velocity before attack for momentum preservation */
+  FVector StoredVelocity = FVector::ZeroVector;
+
+  /** Multiplier for momentum preservation during attacks */
+  UPROPERTY(EditAnywhere, Category = "Movement|Combat")
+  float AttackMomentumMultiplier = 0.7f;
+
+  /** Input smoothing factor for responsive controls */
+  UPROPERTY(EditAnywhere, Category = "Input")
+  float InputSmoothingFactor = 0.8f;
+
+  /** Input deadzone to prevent accidental inputs */
+  UPROPERTY(EditAnywhere, Category = "Input")
+  float InputDeadzone = 0.1f;
+
+  /** Smoothed input vector for movement */
+  FVector2D SmoothedInput = FVector2D::ZeroVector;
+
+  /** Camera boom length during combat attacks */
+  UPROPERTY(EditAnywhere, Category = "Camera|Combat")
+  float CombatCameraDistance = 250.0f;
+
+  /** Camera boom length during exploration */
+  UPROPERTY(EditAnywhere, Category = "Camera|Combat")
+  float ExplorationCameraDistance = 400.0f;
+
+protected:
 public:
   ACombatCharacter();
 
@@ -200,6 +250,10 @@ protected:
 
   /** Update camera lock to target */
   void UpdateCameraLock(float DeltaTime);
+
+  /** Handle attack montage ended to execute buffered attacks */
+  virtual void AttackMontageEnded(UAnimMontage *Montage,
+                                  bool bInterrupted) override;
 
   /** BP hook to animate the camera side switch */
   UFUNCTION(BlueprintImplementableEvent, Category = "Combat")
@@ -286,4 +340,22 @@ public:
 
   /** Check if has a locked target */
   bool HasLockedTarget() const;
+
+  /** Clear the attack buffer */
+  void ClearAttackBuffer();
+
+  /** Execute buffered attack if available */
+  void ExecuteBufferedAttack();
+
+  /** Check if there's a buffered attack */
+  bool HasBufferedAttack() const { return bAttackBuffered; }
+
+  /** Get the type of buffered attack */
+  int32 GetBufferedAttackType() const { return BufferedAttackType; }
+
+  /** Get stored velocity for momentum preservation */
+  const FVector &GetStoredVelocity() const { return StoredVelocity; }
+
+  /** Get attack momentum multiplier */
+  float GetAttackMomentumMultiplier() const { return AttackMomentumMultiplier; }
 };
