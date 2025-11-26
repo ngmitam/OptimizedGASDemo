@@ -80,6 +80,15 @@ For a comprehensive guide to GAS in this project, including key classes, usage e
 -   Use AttributeSets for health, mana, and custom stats.
 -   Implement abilities as subclasses of `UGameplayAbility`.
 
+### Replication and Prediction Best-Practices
+
+This project follows Lyra-inspired standards for multiplayer safety:
+
+-   **Authority Checks**: Use `HasAuthority()` guards for server-only operations like ability granting and attribute initialization.
+-   **Replication Conditions**: UI attributes (e.g., Health, MaxHealth) use `COND_OwnerOnly` to optimize bandwidth; gameplay attributes use `COND_None`.
+-   **Net Execution Policies**: Passive abilities use `ServerOnly` to prevent client-side inconsistencies; predicted abilities use `LocalPredicted`.
+-   **Error Handling**: Log failures in data loading and ability activation for debugging.
+
 ## Contributing
 
 This repository is for experimentation and learning. Contributions are welcome!

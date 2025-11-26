@@ -23,18 +23,20 @@ void ACombatPlayerState::BeginPlay() {
   if (AbilitySystemComponent) {
     AbilitySystemComponent->InitAbilityActorInfo(this, this);
 
-    // Set default attributes
-    AbilitySystemComponent->SetNumericAttributeBase(
-        UCombatAttributeSet::GetMaxHealthAttribute(), DefaultMaxHP);
-    AbilitySystemComponent->SetNumericAttributeBase(
-        UCombatAttributeSet::GetHealthAttribute(), DefaultMaxHP);
-    AbilitySystemComponent->SetNumericAttributeBase(
-        UCombatAttributeSet::GetDamageAttribute(), DefaultMeleeDamage);
-    AbilitySystemComponent->SetNumericAttributeBase(
-        UCombatAttributeSet::GetKnockbackImpulseAttribute(),
-        DefaultMeleeKnockbackImpulse);
-    AbilitySystemComponent->SetNumericAttributeBase(
-        UCombatAttributeSet::GetLaunchImpulseAttribute(),
-        DefaultMeleeLaunchImpulse);
+    // Set default attributes (server-only for multiplayer safety)
+    if (HasAuthority()) {
+      AbilitySystemComponent->SetNumericAttributeBase(
+          UCombatAttributeSet::GetMaxHealthAttribute(), DefaultMaxHP);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          UCombatAttributeSet::GetHealthAttribute(), DefaultMaxHP);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          UCombatAttributeSet::GetDamageAttribute(), DefaultMeleeDamage);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          UCombatAttributeSet::GetKnockbackImpulseAttribute(),
+          DefaultMeleeKnockbackImpulse);
+      AbilitySystemComponent->SetNumericAttributeBase(
+          UCombatAttributeSet::GetLaunchImpulseAttribute(),
+          DefaultMeleeLaunchImpulse);
+    }
   }
 }

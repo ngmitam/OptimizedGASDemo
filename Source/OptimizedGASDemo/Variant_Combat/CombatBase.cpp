@@ -146,25 +146,27 @@ void ACombatBase::InitializePawnData() {
   // Load from data table if specified
   PawnData->LoadFromDataTable();
 
-  // Grant abilities
-  for (TSubclassOf<UGameplayAbility> AbilityClass :
-       PawnData->GrantedAbilities) {
-    if (AbilityClass) {
-      FGameplayAbilitySpec AbilitySpec(AbilityClass, 1);
-      AbilitySystemComponent->GiveAbility(AbilitySpec);
+  // Grant abilities (server-only for multiplayer safety)
+  if (HasAuthority()) {
+    for (TSubclassOf<UGameplayAbility> AbilityClass :
+         PawnData->GrantedAbilities) {
+      if (AbilityClass) {
+        FGameplayAbilitySpec AbilitySpec(AbilityClass, 1);
+        AbilitySystemComponent->GiveAbility(AbilitySpec);
+      }
     }
-  }
 
-  // Apply granted effects
-  for (TSubclassOf<UGameplayEffect> EffectClass : PawnData->GrantedEffects) {
-    if (EffectClass) {
-      FGameplayEffectSpecHandle EffectSpecHandle =
-          AbilitySystemComponent->MakeOutgoingSpec(
-              EffectClass, DefaultEffectLevel,
-              AbilitySystemComponent->MakeEffectContext());
-      if (EffectSpecHandle.IsValid()) {
-        AbilitySystemComponent->ApplyGameplayEffectSpecToTarget(
-            *EffectSpecHandle.Data.Get(), AbilitySystemComponent);
+    // Apply granted effects
+    for (TSubclassOf<UGameplayEffect> EffectClass : PawnData->GrantedEffects) {
+      if (EffectClass) {
+        FGameplayEffectSpecHandle EffectSpecHandle =
+            AbilitySystemComponent->MakeOutgoingSpec(
+                EffectClass, DefaultEffectLevel,
+                AbilitySystemComponent->MakeEffectContext());
+        if (EffectSpecHandle.IsValid()) {
+          AbilitySystemComponent->ApplyGameplayEffectSpecToTarget(
+              *EffectSpecHandle.Data.Get(), AbilitySystemComponent);
+        }
       }
     }
   }

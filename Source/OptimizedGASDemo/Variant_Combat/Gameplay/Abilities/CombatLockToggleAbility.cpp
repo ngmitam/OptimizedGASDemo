@@ -34,31 +34,56 @@ void UCombatLockToggleAbility::ActivateAbility(
 
   ACombatCharacter *CombatChar =
       Cast<ACombatCharacter>(ActorInfo->AvatarActor.Get());
-  if (CombatChar) {
-    if (CombatChar->HasLockedTarget()) {
-      CombatChar->UnlockTarget();
-      // Re-enable pawn control rotation
-      if (CombatChar->GetCameraBoom()) {
-        CombatChar->GetCameraBoom()->bUsePawnControlRotation = true;
-      }
-      // Remove locked state tag
-      if (CombatChar->GetAbilitySystemComponent()) {
-        CombatChar->GetAbilitySystemComponent()->RemoveLooseGameplayTag(
-            FGameplayTag::RequestGameplayTag(FName("State.Locked")));
-      }
+  if (CombatChar && CombatChar->GetLockSystemComponent()) {
+    // Server reconciliation: let server validate and set lock state
+    if (ActorInfo->AvatarActor->HasAuthority()) {
+      // Server: perform the actual lock/unlock logic
+      Server_ToggleLockState(CombatChar);
     } else {
-      CombatChar->LockOntoTarget();
-      // Disable pawn control rotation for camera lock
-      if (CombatChar->GetCameraBoom()) {
-        CombatChar->GetCameraBoom()->bUsePawnControlRotation = false;
-      }
-      // Add locked state tag
-      if (CombatChar->GetAbilitySystemComponent()) {
-        CombatChar->GetAbilitySystemComponent()->AddLooseGameplayTag(
-            FGameplayTag::RequestGameplayTag(FName("State.Locked")));
-      }
+      // Client: predict the toggle and request server confirmation
+      Client_PredictToggleLock(CombatChar);
     }
   }
 
   EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
+}
+
+void UCombatLockToggleAbility::Server_ToggleLockState(
+    ACombatCharacter *CombatChar) {
+  if (!CombatChar || !CombatChar->GetLockSystemComponent()) {
+    return;
+  }
+
+  UCombatLockSystemComponent *LockSystem = CombatChar->GetLockSystemComponent();
+
+  if (LockSystem->HasLockedTarget()) {
+    // Validate that target is still valid before unlocking
+    if (LockSystem->IsTargetStillValid()) {
+      LockSystem->UnlockTarget();
+    } else {
+      // Target became invalid, force unlock
+      LockSystem->UnlockTarget();
+    }
+  } else {
+    // Try to lock onto a new target
+    LockSystem->LockOntoTarget();
+  }
+}
+
+void UCombatLockToggleAbility::Client_PredictToggleLock(
+    ACombatCharacter *CombatChar) {
+  if (!CombatChar || !CombatChar->GetLockSystemComponent()) {
+    return;
+  }
+
+  UCombatLockSystemComponent *LockSystem = CombatChar->GetLockSystemComponent();
+
+  // Client prediction: immediately toggle for responsive feel
+  if (LockSystem->HasLockedTarget()) {
+    LockSystem->UnlockTarget();
+  } else {
+    LockSystem->LockOntoTarget();
+  }
+
+  // Server will reconcile via replication
 }

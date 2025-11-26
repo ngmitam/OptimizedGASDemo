@@ -14,7 +14,7 @@
 
 UCombatReceiveDamageAbility::UCombatReceiveDamageAbility() {
   InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
-  NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
+  NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerOnly;
 
   // Ability tags
   FGameplayTagContainer AssetTags;

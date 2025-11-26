@@ -9,6 +9,9 @@
 #include "AI/CombatEnemy.h"
 #include "CombatLockSystemComponent.generated.h"
 
+// Forward declarations
+class ACombatCharacter;
+
 /**
  * Component that handles locking onto targets in combat
  */
@@ -18,6 +21,9 @@ class UCombatLockSystemComponent : public UActorComponent {
 
 public:
   UCombatLockSystemComponent();
+
+  virtual void GetLifetimeReplicatedProps(
+      TArray<FLifetimeProperty> &OutLifetimeProps) const override;
 
   /** Find and lock onto the nearest target */
   void LockOntoTarget();
@@ -40,14 +46,29 @@ public:
                       const TArray<FHitResult> &HitResults, AActor *BestTarget);
 
 protected:
+  /** Called when locked target changes */
+  UFUNCTION()
+  void OnRep_LockedTarget();
+
+  /** Called when lock state changes */
+  UFUNCTION()
+  void OnRep_IsLocked();
+
+protected:
   virtual void BeginPlay() override;
 
   /** Draw debug information */
   void DrawDebugInfo();
 
   /** The currently locked target */
-  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Lock System")
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Lock System",
+            ReplicatedUsing = OnRep_LockedTarget)
   AActor *LockedTarget;
+
+  /** Whether we currently have a locked target (for replication) */
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Lock System",
+            ReplicatedUsing = OnRep_IsLocked)
+  bool bIsLocked;
 
   /** Maximum distance to lock onto targets */
   UPROPERTY(EditAnywhere, Category = "Lock System",

@@ -18,9 +18,9 @@ void UCombatAttributeSet::GetLifetimeReplicatedProps(
     TArray<FLifetimeProperty> &OutLifetimeProps) const {
   Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-  DOREPLIFETIME_CONDITION_NOTIFY(UCombatAttributeSet, Health, COND_None,
+  DOREPLIFETIME_CONDITION_NOTIFY(UCombatAttributeSet, Health, COND_OwnerOnly,
                                  REPNOTIFY_Always);
-  DOREPLIFETIME_CONDITION_NOTIFY(UCombatAttributeSet, MaxHealth, COND_None,
+  DOREPLIFETIME_CONDITION_NOTIFY(UCombatAttributeSet, MaxHealth, COND_OwnerOnly,
                                  REPNOTIFY_Always);
   DOREPLIFETIME_CONDITION_NOTIFY(UCombatAttributeSet, Damage, COND_None,
                                  REPNOTIFY_Always);

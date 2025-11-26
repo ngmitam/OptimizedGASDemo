@@ -26,6 +26,9 @@ void UCombatPawnData::LoadFromDataTable() {
         if (TSubclassOf<UGameplayAbility> AbilityClass =
                 AbilityPtr.LoadSynchronous()) {
           GrantedAbilities.Add(AbilityClass);
+        } else {
+          UE_LOG(LogTemp, Error, TEXT("Failed to load ability class: %s"),
+                 *AbilityPtr.ToString());
         }
       }
 
@@ -35,8 +38,14 @@ void UCombatPawnData::LoadFromDataTable() {
         if (TSubclassOf<UGameplayEffect> EffectClass =
                 EffectPtr.LoadSynchronous()) {
           GrantedEffects.Add(EffectClass);
+        } else {
+          UE_LOG(LogTemp, Error, TEXT("Failed to load effect class: %s"),
+                 *EffectPtr.ToString());
         }
       }
+    } else {
+      UE_LOG(LogTemp, Error, TEXT("Failed to load attribute data for row: %s"),
+             *AttributeTableRowName.ToString());
     }
   }
 }

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Abilities/CombatGameplayAbility.h"
+#include "CombatCharacter.h"
 #include "CombatLockToggleAbility.generated.h"
 
 /**
@@ -22,4 +23,10 @@ protected:
                   const FGameplayAbilityActorInfo *ActorInfo,
                   const FGameplayAbilityActivationInfo ActivationInfo,
                   const FGameplayEventData *TriggerEventData) override;
+
+  /** Server-side lock state toggle with validation */
+  void Server_ToggleLockState(ACombatCharacter *CombatChar);
+
+  /** Client-side prediction of lock toggle */
+  void Client_PredictToggleLock(ACombatCharacter *CombatChar);
 };

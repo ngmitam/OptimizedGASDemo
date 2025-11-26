@@ -5,7 +5,7 @@
 
 UCombatLockableAbility::UCombatLockableAbility() {
   InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
-  NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
+  NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerOnly;
 
   // Set up ability tags
   FGameplayTagContainer AssetTags;
@@ -22,8 +22,11 @@ void UCombatLockableAbility::OnGiveAbility(
     const FGameplayAbilitySpec &Spec) {
   Super::OnGiveAbility(ActorInfo, Spec);
 
-  // Try to activate the ability immediately upon granting
-  if (ActorInfo && ActorInfo->AbilitySystemComponent.IsValid()) {
+  // Try to activate the ability immediately upon granting (server-only for
+  // multiplayer safety)
+  if (ActorInfo && ActorInfo->AbilitySystemComponent.IsValid() &&
+      ActorInfo->AvatarActor.Get() &&
+      ActorInfo->AvatarActor.Get()->HasAuthority()) {
     ActorInfo->AbilitySystemComponent.Get()->TryActivateAbility(Spec.Handle);
   }
 }

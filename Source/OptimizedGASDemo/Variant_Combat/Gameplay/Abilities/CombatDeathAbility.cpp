@@ -10,7 +10,7 @@
 
 UCombatDeathAbility::UCombatDeathAbility() {
   InstancingPolicy = EGameplayAbilityInstancingPolicy::InstancedPerActor;
-  NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::LocalPredicted;
+  NetExecutionPolicy = EGameplayAbilityNetExecutionPolicy::ServerOnly;
 
   // Set ability tags
   FGameplayTagContainer AssetTags;

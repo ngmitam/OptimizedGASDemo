@@ -9,7 +9,8 @@ UCombatDamageGameplayEffect::UCombatDamageGameplayEffect() {
   // Set duration policy to instant
   DurationPolicy = EGameplayEffectDurationType::Instant;
 
-  // Modifiers: Reduce health by damage amount using SetByCaller
+  // Modifiers: Reduce health by damage amount using SetByCaller (note: damage
+  // values should be negative for health reduction)
   FGameplayModifierInfo HealthModifier;
   HealthModifier.Attribute = UCombatAttributeSet::GetHealthAttribute();
   HealthModifier.ModifierOp = EGameplayModOp::Additive;

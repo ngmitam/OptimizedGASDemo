@@ -270,6 +270,11 @@ public:
     return FollowCamera;
   }
 
+  /** Returns LockSystemComponent subobject **/
+  FORCEINLINE class UCombatLockSystemComponent *GetLockSystemComponent() const {
+    return LockSystemComponent;
+  }
+
   /** Tick function */
   virtual void Tick(float DeltaTime) override;
 
