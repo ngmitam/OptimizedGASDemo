@@ -1,5 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
+// Copyright Nguyen Minh Tam. All Rights Reserved.
 
 #include "SideScrollingPlayerController.h"
 #include "EnhancedInputSubsystems.h"
@@ -13,78 +12,75 @@
 #include "OptimizedGASDemo.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
-void ASideScrollingPlayerController::BeginPlay()
-{
-	Super::BeginPlay();
+void ASideScrollingPlayerController::BeginPlay() {
+  Super::BeginPlay();
 
-	// only spawn touch controls on local player controllers
-	if (SVirtualJoystick::ShouldDisplayTouchInterface() && IsLocalPlayerController())
-	{
-		// spawn the mobile controls widget
-		MobileControlsWidget = CreateWidget<UUserWidget>(this, MobileControlsWidgetClass);
+  // only spawn touch controls on local player controllers
+  if (SVirtualJoystick::ShouldDisplayTouchInterface() &&
+      IsLocalPlayerController()) {
+    // spawn the mobile controls widget
+    MobileControlsWidget =
+        CreateWidget<UUserWidget>(this, MobileControlsWidgetClass);
 
-		if (MobileControlsWidget)
-		{
-			// add the controls to the player screen
-			MobileControlsWidget->AddToPlayerScreen(0);
+    if (MobileControlsWidget) {
+      // add the controls to the player screen
+      MobileControlsWidget->AddToPlayerScreen(0);
 
-		} else {
+    } else {
 
-			UE_LOG(LogOptimizedGASDemo, Error, TEXT("Could not spawn mobile controls widget."));
-
-		}
-
-	}
+      UE_LOG(LogOptimizedGASDemo, Error,
+             TEXT("Could not spawn mobile controls widget."));
+    }
+  }
 }
 
-void ASideScrollingPlayerController::SetupInputComponent()
-{
-	// only add IMCs for local player controllers
-	if (IsLocalPlayerController())
-	{
-		// add the input mapping context
-		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
-		{
-			for (UInputMappingContext* CurrentContext : DefaultMappingContexts)
-			{
-				Subsystem->AddMappingContext(CurrentContext, 0);
-			}
+void ASideScrollingPlayerController::SetupInputComponent() {
+  Super::SetupInputComponent();
 
-			// only add these IMCs if we're not using mobile touch input
-			if (!SVirtualJoystick::ShouldDisplayTouchInterface())
-			{
-				for (UInputMappingContext* CurrentContext : MobileExcludedMappingContexts)
-				{
-					Subsystem->AddMappingContext(CurrentContext, 0);
-				}
-			}
-		}
-	}
+  // only add IMCs for local player controllers
+  if (IsLocalPlayerController()) {
+    // add the input mapping context
+    if (UEnhancedInputLocalPlayerSubsystem *Subsystem =
+            ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(
+                GetLocalPlayer())) {
+      for (UInputMappingContext *CurrentContext : DefaultMappingContexts) {
+        Subsystem->AddMappingContext(CurrentContext, 0);
+      }
+
+      // only add these IMCs if we're not using mobile touch input
+      if (!SVirtualJoystick::ShouldDisplayTouchInterface()) {
+        for (UInputMappingContext *CurrentContext :
+             MobileExcludedMappingContexts) {
+          Subsystem->AddMappingContext(CurrentContext, 0);
+        }
+      }
+    }
+  }
 }
 
-void ASideScrollingPlayerController::OnPossess(APawn* InPawn)
-{
-	Super::OnPossess(InPawn);
+void ASideScrollingPlayerController::OnPossess(APawn *InPawn) {
+  Super::OnPossess(InPawn);
 
-	// subscribe to the pawn's OnDestroyed delegate
-	InPawn->OnDestroyed.AddDynamic(this, &ASideScrollingPlayerController::OnPawnDestroyed);
+  // subscribe to the pawn's OnDestroyed delegate
+  InPawn->OnDestroyed.AddDynamic(
+      this, &ASideScrollingPlayerController::OnPawnDestroyed);
 }
 
-void ASideScrollingPlayerController::OnPawnDestroyed(AActor* DestroyedActor)
-{
-	// find the player start
-	TArray<AActor*> ActorList;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), APlayerStart::StaticClass(), ActorList);
+void ASideScrollingPlayerController::OnPawnDestroyed(AActor *DestroyedActor) {
+  // find the player start
+  TArray<AActor *> ActorList;
+  UGameplayStatics::GetAllActorsOfClass(GetWorld(), APlayerStart::StaticClass(),
+                                        ActorList);
 
-	if (ActorList.Num() > 0)
-	{
-		// spawn a character at the player start
-		const FTransform SpawnTransform = ActorList[0]->GetActorTransform();
+  if (ActorList.Num() > 0) {
+    // spawn a character at the player start
+    const FTransform SpawnTransform = ActorList[0]->GetActorTransform();
 
-		if (ASideScrollingCharacter* RespawnedCharacter = GetWorld()->SpawnActor<ASideScrollingCharacter>(CharacterClass, SpawnTransform))
-		{
-			// possess the character
-			Possess(RespawnedCharacter);
-		}
-	}
+    if (ASideScrollingCharacter *RespawnedCharacter =
+            GetWorld()->SpawnActor<ASideScrollingCharacter>(CharacterClass,
+                                                            SpawnTransform)) {
+      // possess the character
+      Possess(RespawnedCharacter);
+    }
+  }
 }

@@ -1,4 +1,4 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// Copyright Nguyen Minh Tam. All Rights Reserved.
 
 #include "Variant_Combat/CombatPlayerController.h"
 #include "EnhancedInputSubsystems.h"
@@ -35,6 +35,8 @@ void ACombatPlayerController::BeginPlay() {
 }
 
 void ACombatPlayerController::SetupInputComponent() {
+  Super::SetupInputComponent();
+
   // only add IMCs for local player controllers
   if (IsLocalPlayerController()) {
     // add the input mapping context
