@@ -10,7 +10,8 @@
 #include "CombatDamageable.h"
 #include "Animation/AnimInstance.h"
 #include "Health/CombatHealthComponent.h"
-#include "Attributes/CombatAttributeSet.h"
+#include "Attributes/HealthAttributeSet.h"
+#include "Attributes/DamageAttributeSet.h"
 #include "Data/CombatPawnData.h"
 #include "Data/CombatDamageEventData.h"
 #include "CombatBase.generated.h"
@@ -45,10 +46,15 @@ protected:
             meta = (AllowPrivateAccess = "true"))
   UAbilitySystemComponent *AbilitySystemComponent;
 
-  /** The attribute set for this character */
+  /** The health attribute set for this character */
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
             meta = (AllowPrivateAccess = "true"))
-  UCombatAttributeSet *AttributeSet;
+  UHealthAttributeSet *HealthAttributeSet;
+
+  /** The damage attribute set for this character */
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
+            meta = (AllowPrivateAccess = "true"))
+  UDamageAttributeSet *DamageAttributeSet;
 
   /** Pawn data for attributes and abilities */
   UPROPERTY(EditDefaultsOnly, Category = "GAS")

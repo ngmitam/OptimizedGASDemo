@@ -7,7 +7,9 @@
 #include "Components/WidgetComponent.h"
 #include "Engine/DamageEvents.h"
 #include "GameFramework/CharacterMovementComponent.h"
-#include "Attributes/CombatAttributeSet.h"
+#include "Attributes/HealthAttributeSet.h"
+#include "Attributes/DamageAttributeSet.h"
+#include "Abilities/CombatAbilitySet.h"
 #include "Abilities/CombatReceiveDamageAbility.h"
 #include "Abilities/CombatDeathAbility.h"
 #include "Abilities/CombatTraceAttackAbility.h"
@@ -146,26 +148,53 @@ void ACombatBase::InitializePawnData() {
   // Load from data table if specified
   PawnData->LoadFromDataTable();
 
-  // Grant abilities (server-only for multiplayer safety)
+  // Grant ability sets (server-only for multiplayer safety)
   if (HasAuthority()) {
-    for (TSubclassOf<UGameplayAbility> AbilityClass :
-         PawnData->GrantedAbilities) {
-      if (AbilityClass) {
-        FGameplayAbilitySpec AbilitySpec(AbilityClass, 1);
-        AbilitySystemComponent->GiveAbility(AbilitySpec);
+    bool bHasAbilitySets = false;
+    for (const FCombatAbilitySetWithInput &AbilitySetWithInput :
+         PawnData->AbilitySets) {
+      if (AbilitySetWithInput.AbilitySet) {
+        FCombatAbilitySetHandle AbilitySetHandle;
+        AbilitySetWithInput.AbilitySet->GiveToAbilitySystem(
+            AbilitySystemComponent, AbilitySetHandle, this);
+        bHasAbilitySets = true;
+        // Store the handle for later removal if needed
+        // Note: In a full implementation, you'd store these handles
       }
     }
 
-    // Apply granted effects
-    for (TSubclassOf<UGameplayEffect> EffectClass : PawnData->GrantedEffects) {
-      if (EffectClass) {
-        FGameplayEffectSpecHandle EffectSpecHandle =
-            AbilitySystemComponent->MakeOutgoingSpec(
-                EffectClass, DefaultEffectLevel,
-                AbilitySystemComponent->MakeEffectContext());
-        if (EffectSpecHandle.IsValid()) {
-          AbilitySystemComponent->ApplyGameplayEffectSpecToTarget(
-              *EffectSpecHandle.Data.Get(), AbilitySystemComponent);
+    // Fallback: If no ability sets are configured, add attribute sets directly
+    if (!bHasAbilitySets) {
+      for (TSubclassOf<UAttributeSet> AttributeSetClass :
+           PawnData->AttributeSets) {
+        if (AttributeSetClass) {
+          UAttributeSet *NewAttributeSet = NewObject<UAttributeSet>(
+              AbilitySystemComponent->GetOwner(), AttributeSetClass);
+          AbilitySystemComponent->AddAttributeSetSubobject(NewAttributeSet);
+        }
+      }
+
+      // Fallback: Grant abilities directly if no ability sets
+      for (TSubclassOf<UGameplayAbility> AbilityClass :
+           PawnData->GrantedAbilities) {
+        if (AbilityClass) {
+          FGameplayAbilitySpec AbilitySpec(AbilityClass, 1);
+          AbilitySystemComponent->GiveAbility(AbilitySpec);
+        }
+      }
+
+      // Fallback: Apply granted effects directly
+      for (TSubclassOf<UGameplayEffect> EffectClass :
+           PawnData->GrantedEffects) {
+        if (EffectClass) {
+          FGameplayEffectSpecHandle EffectSpecHandle =
+              AbilitySystemComponent->MakeOutgoingSpec(
+                  EffectClass, DefaultEffectLevel,
+                  AbilitySystemComponent->MakeEffectContext());
+          if (EffectSpecHandle.IsValid()) {
+            AbilitySystemComponent->ApplyGameplayEffectSpecToTarget(
+                *EffectSpecHandle.Data.Get(), AbilitySystemComponent);
+          }
         }
       }
     }
@@ -208,7 +237,7 @@ void ACombatBase::ResetHP() {
   if (UAbilitySystemComponent *ASC = GetAbilitySystemComponent()) {
     if (HealthComponent) {
       float MaxHealth = HealthComponent->GetMaxHealth();
-      ASC->SetNumericAttributeBase(UCombatAttributeSet::GetHealthAttribute(),
+      ASC->SetNumericAttributeBase(UHealthAttributeSet::GetHealthAttribute(),
                                    MaxHealth);
     }
   }

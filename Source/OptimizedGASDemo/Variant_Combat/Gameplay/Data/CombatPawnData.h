@@ -6,11 +6,27 @@
 #include "Engine/DataAsset.h"
 #include "GameplayTagsManager.h"
 #include "GameplayEffect.h"
+#include "InputAction.h"
 #include "CombatPawnData.generated.h"
 
-class UCombatAttributeSet;
+class UAttributeSet;
 class UGameplayAbility;
 class UGameplayEffect;
+class UCombatAbilitySet;
+
+/** Ability set with input mapping */
+USTRUCT(BlueprintType)
+struct FCombatAbilitySetWithInput {
+  GENERATED_BODY()
+
+  /** Ability set to grant */
+  UPROPERTY(EditDefaultsOnly, Category = AbilitySet)
+  TObjectPtr<UCombatAbilitySet> AbilitySet;
+
+  /** Input actions to bind to abilities in this set */
+  UPROPERTY(EditDefaultsOnly, Category = AbilitySet)
+  TArray<TObjectPtr<UInputAction>> InputActions;
+};
 
 /**
  * Data asset for combat pawn attributes and abilities
@@ -32,7 +48,7 @@ public:
 
   /** Default attributes for this pawn */
   UPROPERTY(EditDefaultsOnly, Category = "Attributes")
-  TSubclassOf<UCombatAttributeSet> AttributeSet;
+  TArray<TSubclassOf<UAttributeSet>> AttributeSets;
 
   /** Default health value */
   UPROPERTY(EditDefaultsOnly, Category = "Attributes", meta = (ClampMin = 0))
@@ -54,21 +70,17 @@ public:
   UPROPERTY(EditDefaultsOnly, Category = "Attributes", meta = (ClampMin = 0))
   float DefaultLaunchImpulse = 300.0f;
 
-  /** Default trace distance */
-  UPROPERTY(EditDefaultsOnly, Category = "Attributes", meta = (ClampMin = 0))
-  float DefaultTraceDistance = 75.0f;
-
-  /** Default trace radius */
-  UPROPERTY(EditDefaultsOnly, Category = "Attributes", meta = (ClampMin = 0))
-  float DefaultTraceRadius = 75.0f;
-
-  /** Granted abilities */
-  UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+  /** Granted abilities (legacy - use AbilitySets instead) */
+  UPROPERTY(EditDefaultsOnly, Category = "Abilities (Legacy)")
   TArray<TSubclassOf<UGameplayAbility>> GrantedAbilities;
 
-  /** Granted effects */
-  UPROPERTY(EditDefaultsOnly, Category = "Effects")
+  /** Granted effects (legacy - use AbilitySets instead) */
+  UPROPERTY(EditDefaultsOnly, Category = "Effects (Legacy)")
   TArray<TSubclassOf<UGameplayEffect>> GrantedEffects;
+
+  /** Granted ability sets with input mapping */
+  UPROPERTY(EditDefaultsOnly, Category = "Abilities")
+  TArray<FCombatAbilitySetWithInput> AbilitySets;
 
   /** Load attributes from data table */
   void LoadFromDataTable();

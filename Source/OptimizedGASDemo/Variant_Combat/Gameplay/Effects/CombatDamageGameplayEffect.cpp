@@ -1,7 +1,7 @@
 // Copyright Nguyen Minh Tam. All Rights Reserved.
 
 #include "CombatDamageGameplayEffect.h"
-#include "Attributes/CombatAttributeSet.h"
+#include "Attributes/HealthAttributeSet.h"
 #include "GameplayTagsManager.h"
 #include "GameplayEffect.h"
 
@@ -12,7 +12,7 @@ UCombatDamageGameplayEffect::UCombatDamageGameplayEffect() {
   // Modifiers: Reduce health by damage amount using SetByCaller (note: damage
   // values should be negative for health reduction)
   FGameplayModifierInfo HealthModifier;
-  HealthModifier.Attribute = UCombatAttributeSet::GetHealthAttribute();
+  HealthModifier.Attribute = UHealthAttributeSet::GetHealthAttribute();
   HealthModifier.ModifierOp = EGameplayModOp::Additive;
   FGameplayTag DamageTag =
       FGameplayTag::RequestGameplayTag(FName("Data.Damage"));

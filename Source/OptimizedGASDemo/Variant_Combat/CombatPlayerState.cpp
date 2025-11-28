@@ -2,15 +2,24 @@
 
 #include "CombatPlayerState.h"
 #include "AbilitySystemComponent.h"
-#include "Attributes/CombatAttributeSet.h"
+#include "Attributes/HealthAttributeSet.h"
+#include "Attributes/DamageAttributeSet.h"
 
 ACombatPlayerState::ACombatPlayerState() {
   AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(
       TEXT("AbilitySystemComponent"));
   AbilitySystemComponent->SetIsReplicated(true);
 
-  AttributeSet =
-      CreateDefaultSubobject<UCombatAttributeSet>(TEXT("AttributeSet"));
+  HealthAttributeSet =
+      CreateDefaultSubobject<UHealthAttributeSet>(TEXT("HealthAttributeSet"));
+  DamageAttributeSet =
+      CreateDefaultSubobject<UDamageAttributeSet>(TEXT("DamageAttributeSet"));
+
+  // Add attribute sets to ASC
+  // Note: Attribute sets are now added from AbilitySets in PawnData or as
+  // fallback
+  // AbilitySystemComponent->AddAttributeSetSubobject(HealthAttributeSet);
+  // AbilitySystemComponent->AddAttributeSetSubobject(DamageAttributeSet);
 }
 
 UAbilitySystemComponent *ACombatPlayerState::GetAbilitySystemComponent() const {
@@ -26,16 +35,16 @@ void ACombatPlayerState::BeginPlay() {
     // Set default attributes (server-only for multiplayer safety)
     if (HasAuthority()) {
       AbilitySystemComponent->SetNumericAttributeBase(
-          UCombatAttributeSet::GetMaxHealthAttribute(), DefaultMaxHP);
+          UHealthAttributeSet::GetMaxHealthAttribute(), DefaultMaxHP);
       AbilitySystemComponent->SetNumericAttributeBase(
-          UCombatAttributeSet::GetHealthAttribute(), DefaultMaxHP);
+          UHealthAttributeSet::GetHealthAttribute(), DefaultMaxHP);
       AbilitySystemComponent->SetNumericAttributeBase(
-          UCombatAttributeSet::GetDamageAttribute(), DefaultMeleeDamage);
+          UDamageAttributeSet::GetDamageAttribute(), DefaultMeleeDamage);
       AbilitySystemComponent->SetNumericAttributeBase(
-          UCombatAttributeSet::GetKnockbackImpulseAttribute(),
+          UDamageAttributeSet::GetKnockbackImpulseAttribute(),
           DefaultMeleeKnockbackImpulse);
       AbilitySystemComponent->SetNumericAttributeBase(
-          UCombatAttributeSet::GetLaunchImpulseAttribute(),
+          UDamageAttributeSet::GetLaunchImpulseAttribute(),
           DefaultMeleeLaunchImpulse);
     }
   }

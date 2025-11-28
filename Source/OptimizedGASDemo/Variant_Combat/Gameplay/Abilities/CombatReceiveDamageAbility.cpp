@@ -5,7 +5,7 @@
 #include "AI/CombatEnemy.h"
 #include "Interfaces/CombatDamageable.h"
 #include "AbilitySystemComponent.h"
-#include "Attributes/CombatAttributeSet.h"
+#include "Attributes/HealthAttributeSet.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Camera/CameraShakeBase.h"
@@ -97,11 +97,11 @@ void UCombatReceiveDamageAbility::ActivateAbility(
   ApplyDamageEffects(Damage, ImpactPoint, DamageDirection);
 
   // Check if character should die
-  const UCombatAttributeSet *ConstAttributeSet = Cast<UCombatAttributeSet>(
+  const UHealthAttributeSet *ConstAttributeSet = Cast<UHealthAttributeSet>(
       ActorInfo->AbilitySystemComponent->GetAttributeSet(
-          UCombatAttributeSet::StaticClass()));
-  UCombatAttributeSet *AttributeSet =
-      const_cast<UCombatAttributeSet *>(ConstAttributeSet);
+          UHealthAttributeSet::StaticClass()));
+  UHealthAttributeSet *AttributeSet =
+      const_cast<UHealthAttributeSet *>(ConstAttributeSet);
   if (AttributeSet && AttributeSet->GetHealth() <= 0.0f) {
     // Call HandleDeath instead of playing montage
     if (ActorInfo->AvatarActor.IsValid()) {

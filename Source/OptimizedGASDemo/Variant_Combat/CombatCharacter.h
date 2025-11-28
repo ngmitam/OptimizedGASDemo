@@ -10,7 +10,6 @@
 #include "CombatDamageable.h"
 #include "Animation/AnimInstance.h"
 #include "Health/CombatHealthComponent.h"
-#include "Attributes/CombatAttributeSet.h"
 #include "Data/CombatPawnData.h"
 #include "EnhancedInputComponent.h"
 #include "Data/CombatDamageEventData.h"

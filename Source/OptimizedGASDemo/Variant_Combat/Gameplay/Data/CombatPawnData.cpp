@@ -17,10 +17,8 @@ void UCombatPawnData::LoadFromDataTable() {
       DefaultDamage = Row->DefaultDamage;
       DefaultKnockbackImpulse = Row->DefaultKnockbackImpulse;
       DefaultLaunchImpulse = Row->DefaultLaunchImpulse;
-      DefaultTraceDistance = Row->DefaultTraceDistance;
-      DefaultTraceRadius = Row->DefaultTraceRadius;
 
-      // Load abilities
+      // Load abilities (legacy support)
       GrantedAbilities.Empty();
       for (TSoftClassPtr<UGameplayAbility> AbilityPtr : Row->GrantedAbilities) {
         if (TSubclassOf<UGameplayAbility> AbilityClass =
@@ -32,7 +30,7 @@ void UCombatPawnData::LoadFromDataTable() {
         }
       }
 
-      // Load effects
+      // Load effects (legacy support)
       GrantedEffects.Empty();
       for (TSoftClassPtr<UGameplayEffect> EffectPtr : Row->GrantedEffects) {
         if (TSubclassOf<UGameplayEffect> EffectClass =

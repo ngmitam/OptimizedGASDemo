@@ -5,7 +5,7 @@
 #include "AbilitySystemGlobals.h"
 #include "GameplayTagsManager.h"
 #include "GameFramework/Character.h"
-#include "Attributes/CombatAttributeSet.h"
+#include "Attributes/HealthAttributeSet.h"
 
 UCombatHealthComponent::UCombatHealthComponent(
     const FObjectInitializer &ObjectInitializer)
@@ -17,8 +17,8 @@ void UCombatHealthComponent::OnRegister() {
   Super::OnRegister();
 
   // Get the health and max health attributes from the attribute set
-  HealthAttribute = UCombatAttributeSet::GetHealthAttribute();
-  MaxHealthAttribute = UCombatAttributeSet::GetMaxHealthAttribute();
+  HealthAttribute = UHealthAttributeSet::GetHealthAttribute();
+  MaxHealthAttribute = UHealthAttributeSet::GetMaxHealthAttribute();
 }
 
 void UCombatHealthComponent::BeginPlay() {

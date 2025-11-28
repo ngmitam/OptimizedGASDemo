@@ -45,16 +45,6 @@ struct FCombatAttributeTableRow : public FTableRowBase {
             meta = (ClampMin = 0))
   float DefaultLaunchImpulse = 300.0f;
 
-  /** Default trace distance */
-  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attributes",
-            meta = (ClampMin = 0))
-  float DefaultTraceDistance = 75.0f;
-
-  /** Default trace radius */
-  UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Attributes",
-            meta = (ClampMin = 0))
-  float DefaultTraceRadius = 75.0f;
-
   /** Granted abilities */
   UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Abilities")
   TArray<TSoftClassPtr<UGameplayAbility>> GrantedAbilities;

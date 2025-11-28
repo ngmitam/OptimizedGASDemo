@@ -8,7 +8,7 @@
 #include "GameplayTagsManager.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "Effects/CombatDamageGameplayEffect.h"
-#include "Attributes/CombatAttributeSet.h"
+#include "Attributes/DamageAttributeSet.h"
 #include "Data/CombatAttackEventData.h"
 
 UCombatTraceAttackAbility::UCombatTraceAttackAbility() {
@@ -71,7 +71,7 @@ void UCombatTraceAttackAbility::PerformAttackTrace() {
   float Damage = DamageAmount;
   if (ASC) {
     Damage =
-        ASC->GetNumericAttribute(UCombatAttributeSet::GetDamageAttribute());
+        ASC->GetNumericAttribute(UDamageAttributeSet::GetDamageAttribute());
   }
 
   // Get knockback and launch from GAS attributes
@@ -79,20 +79,14 @@ void UCombatTraceAttackAbility::PerformAttackTrace() {
   float LaunchValue = LaunchImpulse;
   if (ASC) {
     KnockbackValue = ASC->GetNumericAttribute(
-        UCombatAttributeSet::GetKnockbackImpulseAttribute());
+        UDamageAttributeSet::GetKnockbackImpulseAttribute());
     LaunchValue = ASC->GetNumericAttribute(
-        UCombatAttributeSet::GetLaunchImpulseAttribute());
+        UDamageAttributeSet::GetLaunchImpulseAttribute());
   }
 
-  // Get trace parameters from GAS attributes (use defaults if no ASC)
+  // Get trace parameters from ability properties
   float TraceDistanceValue = TraceDistance;
   float TraceRadiusValue = TraceRadius;
-  if (ASC) {
-    TraceDistanceValue = ASC->GetNumericAttribute(
-        UCombatAttributeSet::GetTraceDistanceAttribute());
-    TraceRadiusValue = ASC->GetNumericAttribute(
-        UCombatAttributeSet::GetTraceRadiusAttribute());
-  }
 
   // Sweep for objects in front of the character to be hit by the attack
   TArray<FHitResult> OutHits;

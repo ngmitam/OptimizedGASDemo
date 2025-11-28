@@ -5,6 +5,8 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerState.h"
 #include "AbilitySystemInterface.h"
+#include "Attributes/HealthAttributeSet.h"
+#include "Attributes/DamageAttributeSet.h"
 #include "CombatPlayerState.generated.h"
 
 class UAbilitySystemComponent;
@@ -30,10 +32,15 @@ protected:
             meta = (AllowPrivateAccess = "true"))
   UAbilitySystemComponent *AbilitySystemComponent;
 
-  /** The attribute set for this player state */
+  /** The health attribute set for this player state */
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
             meta = (AllowPrivateAccess = "true"))
-  UAttributeSet *AttributeSet;
+  UHealthAttributeSet *HealthAttributeSet;
+
+  /** The damage attribute set for this player state */
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
+            meta = (AllowPrivateAccess = "true"))
+  UDamageAttributeSet *DamageAttributeSet;
 
   /** Default max HP for the player */
   UPROPERTY(EditAnywhere, Category = "Attributes",

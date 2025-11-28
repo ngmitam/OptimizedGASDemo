@@ -12,7 +12,8 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Animation/AnimInstance.h"
 #include "AbilitySystemComponent.h"
-#include "Attributes/CombatAttributeSet.h"
+#include "Attributes/HealthAttributeSet.h"
+#include "Attributes/DamageAttributeSet.h"
 #include "GameplayTagsManager.h"
 #include "Abilities/CombatReceiveDamageAbility.h"
 #include "Abilities/CombatDeathAbility.h"
@@ -43,29 +44,41 @@ ACombatEnemy::ACombatEnemy() {
   AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(
       TEXT("AbilitySystemComponent"));
 
-  // create the attribute set
-  AttributeSet =
-      CreateDefaultSubobject<UCombatAttributeSet>(TEXT("AttributeSet"));
+  // create the attribute sets
+  HealthAttributeSet =
+      CreateDefaultSubobject<UHealthAttributeSet>(TEXT("HealthAttributeSet"));
+  DamageAttributeSet =
+      CreateDefaultSubobject<UDamageAttributeSet>(TEXT("DamageAttributeSet"));
+
+  // Add attribute sets to ASC
+  // Note: Attribute sets are now added from AbilitySets in PawnData or as
+  // fallback
+  // AbilitySystemComponent->AddAttributeSetSubobject(HealthAttributeSet);
+  // AbilitySystemComponent->AddAttributeSetSubobject(DamageAttributeSet);
 
   // Create default pawn data with abilities
   PawnData = CreateDefaultSubobject<UCombatPawnData>(TEXT("PawnData"));
   if (PawnData) {
+    // Set attribute sets
+    PawnData->AttributeSets.Add(UHealthAttributeSet::StaticClass());
+    PawnData->AttributeSets.Add(UDamageAttributeSet::StaticClass());
+
     // Set default attributes
     PawnData->DefaultHealth = MaxHP;
     PawnData->DefaultMaxHealth = MaxHP;
     PawnData->DefaultDamage = MeleeDamage;
     PawnData->DefaultKnockbackImpulse = MeleeKnockbackImpulse;
     PawnData->DefaultLaunchImpulse = MeleeLaunchImpulse;
-    PawnData->DefaultTraceDistance = MeleeTraceDistance;
-    PawnData->DefaultTraceRadius = MeleeTraceRadius;
 
-    // Add granted abilities
+    // Set default abilities (fallback when no AbilitySets are configured)
     PawnData->GrantedAbilities.Add(UCombatReceiveDamageAbility::StaticClass());
     PawnData->GrantedAbilities.Add(UCombatDeathAbility::StaticClass());
     PawnData->GrantedAbilities.Add(UCombatTraceAttackAbility::StaticClass());
     PawnData->GrantedAbilities.Add(UCombatChargedAttackAbility::StaticClass());
     PawnData->GrantedAbilities.Add(UCombatComboAttackAbility::StaticClass());
     PawnData->GrantedAbilities.Add(UCombatLockableAbility::StaticClass());
+
+    // Note: Abilities are now configured via AbilitySets in PawnData
   }
 
   // set the AI Controller class by default
