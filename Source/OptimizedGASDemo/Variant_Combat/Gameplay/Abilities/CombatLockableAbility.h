@@ -3,14 +3,15 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Abilities/GameplayAbility.h"
+#include "CombatGameplayAbility.h"
 #include "CombatLockableAbility.generated.h"
 
 /**
  * Ability that grants the lockable tag to make the enemy lockable
  */
 UCLASS()
-class OPTIMIZEDGASDEMO_API UCombatLockableAbility : public UGameplayAbility {
+class OPTIMIZEDGASDEMO_API UCombatLockableAbility
+    : public UCombatGameplayAbility {
   GENERATED_BODY()
 
 public:

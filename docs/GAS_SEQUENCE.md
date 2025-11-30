@@ -12,15 +12,16 @@ When a PlayerState is created, the ASC is constructed and initialized so abiliti
 sequenceDiagram
     participant PS as ACombatPlayerState
     participant ASC as AbilitySystemComponent
-    participant AS as CombatAttributeSet
+    participant AS as AttributeSets
 
     PS->>ASC: CreateDefaultSubobject UAbilitySystemComponent
     PS->>ASC: SetIsReplicated(true)
-    PS->>AS: CreateDefaultSubobject UCombatAttributeSet
-    PS->>ASC: InitAbilityActorInfo(this, this)
-    PS->>ASC: SetNumericAttributeBase(GetMaxHealth, DefaultMaxHP)
-    PS->>ASC: SetNumericAttributeBase(GetHealth, DefaultMaxHP)
-    note over ASC,AS: ASC now owns AttributeSet and is ready
+    PS->>AS: CreateDefaultSubobject UHealthAttributeSet
+    PS->>AS: CreateDefaultSubobject UDamageAttributeSet
+    PS->>AS: CreateDefaultSubobject UStaminaAttributeSet
+    PS->>PS: InitAbilityActorInfo(this, GetPawn())
+    PS->>ASC: SetNumericAttributeBase(Health/MaxHealth/Stamina/MaxStamina/Damage)
+    note over ASC,AS: ASC now owns AttributeSets and is ready
 ```
 
 ## 2) Attack ability activation & trace flow (CombatTraceAttackAbility)
@@ -38,11 +39,12 @@ sequenceDiagram
     Char->>ASC: Trigger Event.Trace.Attack
     ASC->>Ability: ActivateAbility(TriggerEventData)
     Ability->>ASC: CommitAbility()
-    Ability->>ASC: GetNumericAttribute(Damage/Knockback/TraceParams)
+    Ability->>ASC: GetNumericAttribute(Damage/Knockback/LaunchImpulse/StaminaUsed)
+    Ability->>Ability: ScaleDamage = Damage + (StaminaUsed * 1.5)
     Ability->>World: SweepMultiByObjectType(TraceStart, TraceEnd)
     World-->>Ability: HitResults
-    Ability->>Target: ApplyDamage(Damage, Instigator, ImpactPoint, Impulse)
-    Ability->>Char: DealtDamage(Damage, ImpactPoint)
+    Ability->>Target: ApplyDamage(ScaledDamage, Instigator, ImpactPoint, Impulse)
+    Ability->>Char: DealtDamage(ScaledDamage, ImpactPoint)
 ```
 
 ## 3) Combo and Charged attack flow
@@ -62,9 +64,11 @@ sequenceDiagram
 
     %% Combo attack flow (quick presses)
     Player->>Char: ComboButton Press
-    Char->>ASC: Trigger Event.Combo.Attack
+    Char->>ASC: Trigger Event.Attack.Combo.Start
     ASC->>Combo: ActivateAbility(TriggerEventData)
     Combo->>ASC: CommitAbility()
+    Combo->>ASC: ApplyStaminaCost(StaminaCosts[0])
+    Combo->>ASC: SetStaminaUsed(StaminaCosts[0])
     Combo->>Anim: PlayComboMontage
     Anim-->>Combo: MontageNotify_Hit
     Combo->>ASC: GetNumericAttribute(Damage)
@@ -72,25 +76,40 @@ sequenceDiagram
     World-->>Combo: HitResults
     Combo->>Target: ApplyDamage(Damage, Instigator, ImpactPoint, Impulse)
     Combo->>Char: DealtDamage(Damage, ImpactPoint)
+    Player->>Char: ComboButton Press (next)
+    Char->>ASC: Trigger Event.Attack.Combo.Next
+    ASC->>Combo: HandleComboNext()
+    Combo->>ASC: ApplyStaminaCost(StaminaCosts[1])
+    Combo->>ASC: AddStaminaUsed(StaminaCosts[1])
+    Combo->>Anim: Montage_JumpToSection(NextSection)
 
     %% Charged attack flow (press and hold)
     Player->>Char: ChargedButton Press (start)
-    Char->>ASC: Trigger Event.Charge.Start
+    Char->>ASC: Trigger Event.Attack.Charged.Start
     ASC->>Charged: ActivateAbility(ChargeStart)
-    Charged->>Charged: StartChargeLoop (accumulate charge)
+    Charged->>ASC: ApplyStaminaCost(StaminaCosts[0])
+    Charged->>Charged: StartChargeLoop (accumulate TotalStaminaUsed)
+    Charged->>Anim: PlayChargedAttackMontage
+    loop While Holding
+        Anim-->>Charged: MontageNotify_Charged.Loop
+        Charged->>ASC: ApplyStaminaCost(StaminaCosts[0])
+        Charged->>Charged: TotalStaminaUsed += StaminaCosts[0]
+        Charged->>Anim: Montage_JumpToSection(ChargeLoopSection)
+    end
     alt Release
         Player->>Char: ChargedButton Release
-        Char->>Charged: Trigger ChargeRelease
-        Charged->>ASC: CommitAbility()
-        Charged->>Anim: PlayChargedAttackMontage
+        Char->>Charged: Trigger Event.Attack.Charged.Release
+        Charged->>ASC: SetStaminaUsed(TotalStaminaUsed)
+        Charged->>Anim: Montage_JumpToSection(ChargeAttackSection)
         Anim-->>Charged: MontageNotify_Hit
         Charged->>ASC: GetNumericAttribute(Damage)
         Charged->>World: SweepMultiByObjectType(TraceStart, TraceEnd)
         World-->>Charged: HitResults
         Charged->>Target: ApplyDamage(Damage, Instigator, ImpactPoint, Impulse)
         Charged->>Char: DealtDamage(Damage, ImpactPoint)
-    else TimeoutOrCancel
-        Charged->>Charged: AutoCancelOrMaxCharge
+    else AutoRelease (Stamina Depleted)
+        Charged->>Charged: HandleChargedAttackRelease()
+        Note right of Charged: Same flow as manual release
     end
 ```
 
@@ -106,17 +125,61 @@ sequenceDiagram
     participant DamageAbility as CombatReceiveDamageAbility
     participant GE as CombatDamageGameplayEffect
 
-    Source->>Target: DealDamage
+    Source->>Target: DealDamage(Damage, ImpactPoint, Impulse)
     Target->>TargetASC: Trigger Event.Damage.Received
     TargetASC->>DamageAbility: ActivateAbility(TriggerEventData)
+    DamageAbility->>TargetASC: CommitAbility()
     DamageAbility->>TargetASC: MakeOutgoingSpec(GE)
     DamageAbility->>DamageAbility: Set SetByCaller Data.Damage = -Damage
     DamageAbility->>TargetASC: ApplyGameplayEffectSpecToTarget(DamageSpec)
     TargetASC-->>Target: AttributeChanged(Health decreased)
     alt Health <= 0
-        Target->>Target: HandleDeath()
+        Target->>TargetASC: Trigger Event.Death
+        TargetASC->>DeathAbility: ActivateAbility()
+        DeathAbility->>Target: HandleDeath() - DisableMovement, Ragdoll, Timer
+        alt Player
+            DeathAbility->>Target: RespawnCharacter()
+        else Enemy
+            DeathAbility->>Target: RemoveFromLevel()
+        end
     else
         Target->>Target: ReceivedDamageFeedback()
+    end
+```
+
+## 5) Stamina regeneration flow (CombatStaminaRegenerationAbility)
+
+This flow shows how stamina regenerates passively for players and reactively for enemies.
+
+```mermaid
+sequenceDiagram
+    participant Player as PlayerCharacter
+    participant Enemy as EnemyCharacter
+    participant ASC as AbilitySystemComponent
+    participant RegenAbility as CombatStaminaRegenerationAbility
+    participant GE as CombatStaminaRegenerationGE
+
+    %% Player continuous regeneration
+    Player->>ASC: Grant CombatStaminaRegenerationAbility
+    ASC->>RegenAbility: OnGiveAbility() -> TryActivateAbility()
+    RegenAbility->>RegenAbility: ApplyRegenerationEffect() - Continuous GE
+    RegenAbility->>ASC: ApplyGameplayEffectSpec(CombatStaminaRegenerationGE)
+    ASC-->>Player: Stamina gradually increases over time
+
+    %% Enemy reactive regeneration
+    Enemy->>ASC: Grant CombatStaminaRegenerationAbility
+    ASC->>RegenAbility: OnGiveAbility() -> TryActivateAbility()
+    RegenAbility->>RegenAbility: Bind to Stamina attribute changes
+    Enemy->>Enemy: Use Stamina (attacks, etc.)
+    ASC-->>RegenAbility: OnStaminaChanged() - Detect depletion
+    alt Stamina == 0
+        RegenAbility->>ASC: ApplyGameplayEffectSpec(CombatStaminaStunGE)
+        ASC-->>Enemy: State.Stunned tag applied
+        RegenAbility->>RegenAbility: Start refill timer
+        RegenAbility->>ASC: Remove StaminaStunGE after delay
+        RegenAbility->>RegenAbility: ApplyRegenerationEffect() - Refill to max
+    else Stamina > 0
+        RegenAbility->>RegenAbility: ApplyRegenerationEffect() - Gradual regen
     end
 ```
 
@@ -124,3 +187,4 @@ sequenceDiagram
 
 -   Open `docs/GAS_SEQUENCE.md` in VS Code and preview with Mermaid support to see the diagrams.
 -   Use these as a reference when adding new abilities, attributes, or GameplayEffects: follow the ASC init pattern and the ability commit/apply flow.
+-   Key concepts: Stamina costs scale damage, momentum preservation during attacks, enemy notification system, and proper cleanup with GrantedHandles.

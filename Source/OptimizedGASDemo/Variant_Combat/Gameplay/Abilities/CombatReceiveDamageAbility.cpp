@@ -2,6 +2,8 @@
 
 #include "CombatReceiveDamageAbility.h"
 #include "CombatBase.h"
+#include "CombatCharacter.h"
+#include "CombatPlayerState.h"
 #include "AI/CombatEnemy.h"
 #include "Interfaces/CombatDamageable.h"
 #include "AbilitySystemComponent.h"
@@ -47,6 +49,7 @@ void UCombatReceiveDamageAbility::ActivateAbility(
     const FGameplayAbilityActivationInfo ActivationInfo,
     const FGameplayEventData *TriggerEventData) {
   Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
+
   if (!CommitAbility(Handle, ActorInfo, ActivationInfo)) {
     EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
     return;
@@ -80,17 +83,16 @@ void UCombatReceiveDamageAbility::ActivateAbility(
                   3.0f);
 
   // Apply damage via Gameplay Effect
-  if (ActorInfo->AbilitySystemComponent.IsValid() && DamageGameplayEffect) {
-    FGameplayEffectSpecHandle DamageSpecHandle =
-        ActorInfo->AbilitySystemComponent->MakeOutgoingSpec(
-            DamageGameplayEffect, 1.0f,
-            ActorInfo->AbilitySystemComponent->MakeEffectContext());
+  // Use consistent ASC retrieval for both players and enemies
+  UAbilitySystemComponent *ASC = GetAbilitySystemComponent(ActorInfo);
+
+  if (ASC && DamageGameplayEffect) {
+    FGameplayEffectSpecHandle DamageSpecHandle = ASC->MakeOutgoingSpec(
+        DamageGameplayEffect, 1.0f, ASC->MakeEffectContext());
     if (DamageSpecHandle.IsValid()) {
       DamageSpecHandle.Data.Get()->SetSetByCallerMagnitude(
           FGameplayTag::RequestGameplayTag(FName("Data.Damage")), -Damage);
-      ActorInfo->AbilitySystemComponent->ApplyGameplayEffectSpecToTarget(
-          *DamageSpecHandle.Data.Get(),
-          ActorInfo->AbilitySystemComponent.Get());
+      ASC->ApplyGameplayEffectSpecToTarget(*DamageSpecHandle.Data.Get(), ASC);
     }
   }
 
@@ -98,57 +100,60 @@ void UCombatReceiveDamageAbility::ActivateAbility(
 
   // Check if character should die
   const UHealthAttributeSet *ConstAttributeSet = Cast<UHealthAttributeSet>(
-      ActorInfo->AbilitySystemComponent->GetAttributeSet(
-          UHealthAttributeSet::StaticClass()));
+      ASC->GetAttributeSet(UHealthAttributeSet::StaticClass()));
   UHealthAttributeSet *AttributeSet =
       const_cast<UHealthAttributeSet *>(ConstAttributeSet);
-  if (AttributeSet && AttributeSet->GetHealth() <= 0.0f) {
-    // Call HandleDeath instead of playing montage
-    if (ActorInfo->AvatarActor.IsValid()) {
-      ICombatDamageable *Damageable =
-          Cast<ICombatDamageable>(ActorInfo->AvatarActor.Get());
-      if (Damageable) {
-        Damageable->HandleDeath();
+  if (AttributeSet) {
+    float CurrentHealth = AttributeSet->GetHealth();
+    if (CurrentHealth <= 0.0f) {
+      // Call HandleDeath instead of playing montage
+      if (ActorInfo->AvatarActor.IsValid()) {
+        ICombatDamageable *Damageable =
+            Cast<ICombatDamageable>(ActorInfo->AvatarActor.Get());
+        if (Damageable) {
+          Damageable->HandleDeath();
+        }
       }
-    }
 
-    // Play death camera shake
-    if (DeathCameraShake) {
-      UGameplayStatics::PlayWorldCameraShake(this, DeathCameraShake,
-                                             ImpactPoint, 0.0f, 1000.0f);
-    }
+      // Play death camera shake
+      if (DeathCameraShake) {
+        UGameplayStatics::PlayWorldCameraShake(this, DeathCameraShake,
+                                               ImpactPoint, 0.0f, 1000.0f);
+      }
 
-    EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
-  } else {
-    // Play damage camera shake
-    if (DamageCameraShake) {
-      UGameplayStatics::PlayWorldCameraShake(this, DamageCameraShake,
-                                             ImpactPoint, 0.0f, 1000.0f);
-    }
+      EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
+    } else {
+      // Play damage camera shake
+      if (DamageCameraShake) {
+        UGameplayStatics::PlayWorldCameraShake(this, DamageCameraShake,
+                                               ImpactPoint, 0.0f, 1000.0f);
+      }
 
-    // Call ReceivedDamage for visual effects on character
-    if (ActorInfo->AvatarActor.IsValid()) {
-      // Check if actor is CombatCharacter or CombatEnemy
-      ACombatBase *CombatBase = GetCombatBaseFromActorInfo();
-      if (CombatBase) {
-        CombatBase->ReceivedDamage(Damage, ImpactPoint, DamageDirection);
+      // Call ReceivedDamage for visual effects on character
+      if (ActorInfo->AvatarActor.IsValid()) {
+        // Check if actor is CombatCharacter or CombatEnemy
+        ACombatBase *CombatBase = GetCombatBaseFromActorInfo();
+        if (CombatBase) {
+          CombatBase->ReceivedDamage(Damage, ImpactPoint, DamageDirection);
 
-        if (Cast<ACombatEnemy>(CombatBase)) {
-          // stop the attack montages to interrupt the attack
-          if (UAnimInstance *AnimInstance = Cast<ACombatEnemy>(CombatBase)
-                                                ->GetMesh()
-                                                ->GetAnimInstance()) {
-            AnimInstance->Montage_Stop(
-                0.1f, Cast<ACombatEnemy>(CombatBase)->GetComboAttackMontage());
-            AnimInstance->Montage_Stop(
-                0.1f,
-                Cast<ACombatEnemy>(CombatBase)->GetChargedAttackMontage());
+          if (Cast<ACombatEnemy>(CombatBase)) {
+            // stop the attack montages to interrupt the attack
+            if (UAnimInstance *AnimInstance = Cast<ACombatEnemy>(CombatBase)
+                                                  ->GetMesh()
+                                                  ->GetAnimInstance()) {
+              AnimInstance->Montage_Stop(
+                  0.1f,
+                  Cast<ACombatEnemy>(CombatBase)->GetComboAttackMontage());
+              AnimInstance->Montage_Stop(
+                  0.1f,
+                  Cast<ACombatEnemy>(CombatBase)->GetChargedAttackMontage());
+            }
           }
         }
       }
-    }
 
-    EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
+      EndAbility(Handle, ActorInfo, ActivationInfo, false, false);
+    }
   }
 }
 

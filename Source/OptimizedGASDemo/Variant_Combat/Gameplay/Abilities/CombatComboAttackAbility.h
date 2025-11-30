@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Abilities/CombatGameplayAbility.h"
+#include "GameplayEffect.h"
 #include "CombatComboAttackAbility.generated.h"
 
 class UAnimMontage;
@@ -35,6 +36,18 @@ public:
 
   /** Called when montage ends */
   void OnMontageEnded(UAnimMontage *Montage, bool bInterrupted);
+
+  /** Stamina costs for each combo section */
+  UPROPERTY(EditAnywhere, Category = "Combo")
+  TArray<float> StaminaCosts = {10.0f, 15.0f, 20.0f};
+
+  /** Effect class to use for stamina cost */
+  UPROPERTY(EditAnywhere, Category = "Combo")
+  TSubclassOf<UGameplayEffect> StaminaCostEffectClass;
+
+  /** Effect class to use for setting stamina used */
+  UPROPERTY(EditAnywhere, Category = "Combo")
+  TSubclassOf<UGameplayEffect> StaminaUsedEffectClass;
 
 protected:
   /** Current combo count */

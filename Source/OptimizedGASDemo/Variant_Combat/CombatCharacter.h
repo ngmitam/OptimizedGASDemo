@@ -36,8 +36,7 @@
  *  - Death
  *  - Respawning
  */
-UCLASS()
-class ACombatCharacter : public ACombatBase {
+UCLASS() class ACombatCharacter : public ACombatBase {
   GENERATED_BODY()
 
   /** Camera boom positioning the camera behind the character */
@@ -129,25 +128,12 @@ protected:
   /** Time at which a combo attack button was last pressed */
   float CachedComboAttackInputTime = 0.0f;
 
-  /** Attack buffer time in seconds */
-  UPROPERTY(EditAnywhere, Category = "Input|Combat")
-  float AttackBufferTime = 0.2f;
-
-  /** Timer handle for attack buffer */
-  FTimerHandle AttackBufferTimer;
-
-  /** Whether attack input is buffered */
-  bool bAttackBuffered = false;
-
-  /** Buffered attack type (0=none, 1=combo, 2=charged) */
-  int32 BufferedAttackType = 0;
-
   /** Camera shake for attacks */
   UPROPERTY(EditAnywhere, Category = "Feedback")
   TSubclassOf<UCameraShakeBase> AttackCameraShake;
 
-  /** Time at which a charged attack button was last pressed */
-  float CachedChargedAttackInputTime = 0.0f;
+  /** Time at which lock button was last pressed */
+  float LastLockPressTime = 0.0f;
 
   /** Whether the camera is currently locked to a target */
   bool bCameraLocked = false;
@@ -161,6 +147,9 @@ protected:
   /** Multiplier for momentum preservation during attacks */
   UPROPERTY(EditAnywhere, Category = "Movement|Combat")
   float AttackMomentumMultiplier = 0.7f;
+
+  /** Original max walk speed before stun */
+  float OriginalMaxWalkSpeed = 0.0f;
 
   /** Input smoothing factor for responsive controls */
   UPROPERTY(EditAnywhere, Category = "Input")
@@ -184,6 +173,12 @@ protected:
 protected:
 public:
   ACombatCharacter();
+
+  // ~begin IAbilitySystemInterface
+  virtual UAbilitySystemComponent *GetAbilitySystemComponent() const override;
+  // ~end IAbilitySystemInterface
+
+  virtual void PossessedBy(AController *NewController) override;
 
   /** Get combo input cache time tolerance */
   float GetComboInputCacheTimeTolerance() const override {
@@ -213,16 +208,6 @@ public:
   /** Set cached combo attack input time */
   void SetCachedComboAttackInputTime(float Time) {
     CachedComboAttackInputTime = Time;
-  }
-
-  /** Get cached charged attack input time */
-  float GetCachedChargedAttackInputTime() const {
-    return CachedChargedAttackInputTime;
-  }
-
-  /** Set cached charged attack input time */
-  void SetCachedChargedAttackInputTime(float Time) {
-    CachedChargedAttackInputTime = Time;
   }
 
 protected:
@@ -331,30 +316,16 @@ public:
   /** Tick function */
   virtual void Tick(float DeltaTime) override;
 
-  /** Lock onto a target */
-  void LockOntoTarget();
-
-  /** Unlock the current target */
-  void UnlockTarget();
-
   /** Check if has a locked target */
   bool HasLockedTarget() const;
-
-  /** Clear the attack buffer */
-  void ClearAttackBuffer();
-
-  /** Execute buffered attack if available */
-  void ExecuteBufferedAttack();
-
-  /** Check if there's a buffered attack */
-  bool HasBufferedAttack() const { return bAttackBuffered; }
-
-  /** Get the type of buffered attack */
-  int32 GetBufferedAttackType() const { return BufferedAttackType; }
 
   /** Get stored velocity for momentum preservation */
   const FVector &GetStoredVelocity() const { return StoredVelocity; }
 
   /** Get attack momentum multiplier */
   float GetAttackMomentumMultiplier() const { return AttackMomentumMultiplier; }
+
+private:
+  /** Handle movement speed attribute changes */
+  void HandleMovementSpeedChanged(const FOnAttributeChangeData &ChangeData);
 };

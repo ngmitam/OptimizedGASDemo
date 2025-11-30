@@ -7,6 +7,10 @@
 #include "AI/CombatEnemy.h"
 #include "Animation/AnimInstance.h"
 #include "GameplayTagsManager.h"
+#include "Attributes/StaminaAttributeSet.h"
+#include "Effects/CombatStaminaCostGameplayEffect.h"
+#include "Effects/CombatStaminaUsedGameplayEffect.h"
+#include "Effects/CombatStaminaUsedResetGameplayEffect.h"
 
 UCombatChargedAttackAbility::UCombatChargedAttackAbility() {
   // Set up ability tags
@@ -18,6 +22,8 @@ UCombatChargedAttackAbility::UCombatChargedAttackAbility() {
   // Add state tag while active
   ActivationOwnedTags.AddTag(
       FGameplayTag::RequestGameplayTag(FName("State.Attacking")));
+  ActivationOwnedTags.AddTag(
+      FGameplayTag::RequestGameplayTag(FName("State.ChargingAttack")));
 
   // Block other attack abilities while charging
   BlockAbilitiesWithTag.AddTag(
@@ -34,9 +40,11 @@ UCombatChargedAttackAbility::UCombatChargedAttackAbility() {
   StartTriggerData.TriggerSource = EGameplayAbilityTriggerSource::GameplayEvent;
   AbilityTriggers.Add(StartTriggerData);
 
-  // Set default montage sections
-  ChargeLoopSection = FName("ChargeLoop");
-  ChargeAttackSection = FName("ChargeAttack");
+  // Set default stamina cost effect class
+  StaminaCostEffectClass = UCombatStaminaCostGameplayEffect::StaticClass();
+
+  // Set default stamina used effect class
+  StaminaUsedEffectClass = UCombatStaminaUsedGameplayEffect::StaticClass();
 }
 
 void UCombatChargedAttackAbility::ActivateAbility(
@@ -44,6 +52,19 @@ void UCombatChargedAttackAbility::ActivateAbility(
     const FGameplayAbilityActorInfo *ActorInfo,
     const FGameplayAbilityActivationInfo ActivationInfo,
     const FGameplayEventData *TriggerEventData) {
+  // Check if stunned, cannot attack
+  UAbilitySystemComponent *ASC = GetAbilitySystemComponent(ActorInfo);
+  if (ASC->HasMatchingGameplayTag(
+          FGameplayTag::RequestGameplayTag(FName("State.Stunned")))) {
+    // For enemies, notify StateTree that attack is completed even when stunned
+    ACombatBase *CombatBase = GetCombatBaseFromActorInfo();
+    if (ACombatEnemy *CombatEnemy = Cast<ACombatEnemy>(CombatBase)) {
+      CombatEnemy->OnAttackCompleted.ExecuteIfBound();
+    }
+    EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+    return;
+  }
+
   if (!CommitAbility(Handle, ActorInfo, ActivationInfo)) {
     EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
     return;
@@ -51,6 +72,37 @@ void UCombatChargedAttackAbility::ActivateAbility(
 
   // Determine if player or AI and get montage
   ACombatBase *CombatBase = GetCombatBaseFromActorInfo();
+
+  // Check if we have enough stamina for at least one loop
+  float CurrentStamina =
+      ASC->GetNumericAttribute(UStaminaAttributeSet::GetStaminaAttribute());
+  if (ASC && StaminaCosts.Num() > 0) {
+    float StaminaCost = StaminaCosts[0];
+    if (CurrentStamina < StaminaCost) {
+      // Not enough stamina to start charging, for enemies set to 0 to refill,
+      // end ability
+      if (CombatBase && !CombatBase->IsPlayerControlled()) {
+        ASC->SetNumericAttributeBase(
+            UStaminaAttributeSet::GetStaminaAttribute(), 0.0f);
+      }
+      EndAbility(Handle, ActorInfo, ActivationInfo, true, false);
+      return;
+    }
+
+    // Apply stamina cost for the first loop immediately
+    FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(
+        StaminaCostEffectClass, GetAbilityLevel(), ASC->MakeEffectContext());
+    if (SpecHandle.IsValid()) {
+      // Set the stamina cost using SetByCaller
+      SpecHandle.Data.Get()->SetSetByCallerMagnitude(
+          FGameplayTag::RequestGameplayTag(FName("Data.StaminaCost")),
+          -StaminaCost);
+      ASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), ASC);
+    }
+
+    // Set stamina used for damage scaling
+    TotalStaminaUsed = StaminaCost;
+  }
 
   if (CombatBase) {
     if (Cast<ACombatCharacter>(CombatBase)) {
@@ -65,9 +117,6 @@ void UCombatChargedAttackAbility::ActivateAbility(
     ChargedAttackMontage = CombatBase->GetChargedAttackMontage();
     ChargeLoopSection = CombatBase->GetChargeLoopSection();
     ChargeAttackSection = CombatBase->GetChargeAttackSection();
-
-    // Set attacking flag
-    CombatBase->SetIsAttacking(true);
 
     // Enable root motion on skeletal mesh for attack movement
     if (USkeletalMeshComponent *Mesh = CombatBase->GetMesh()) {
@@ -86,8 +135,7 @@ void UCombatChargedAttackAbility::ActivateAbility(
     }
 
     // Notify enemies of attack via ability
-    if (UAbilitySystemComponent *ASC =
-            GetAbilitySystemComponentFromActorInfo()) {
+    if (ASC) {
       FGameplayEventData EventData;
       EventData.Instigator = TObjectPtr<AActor>(CombatBase);
       EventData.Target = TObjectPtr<AActor>(CombatBase);
@@ -97,7 +145,8 @@ void UCombatChargedAttackAbility::ActivateAbility(
     }
   }
 
-  CurrentChargeLoop = 0;
+  CurrentChargeLoop = 1;
+  bAutoReleased = false;
 
   // Play montage
   if (ChargedAttackMontage) {
@@ -116,7 +165,7 @@ void UCombatChargedAttackAbility::ActivateAbility(
   }
 
   // Listen for events
-  if (UAbilitySystemComponent *ASC = GetAbilitySystemComponentFromActorInfo()) {
+  if (ASC) {
     ASC->GenericGameplayEventCallbacks
         .FindOrAdd(FGameplayTag::RequestGameplayTag(
             FName("Event.Attack.Charged.Loop")))
@@ -132,6 +181,18 @@ void UCombatChargedAttackAbility::ActivateAbility(
 
 void UCombatChargedAttackAbility::OnMontageEnded(UAnimMontage *Montage,
                                                  bool bInterrupted) {
+  // Reset stamina used for next attack via GE
+  UAbilitySystemComponent *ASC =
+      GetAbilitySystemComponent(GetCurrentActorInfo());
+  if (ASC) {
+    FGameplayEffectSpecHandle ResetSpecHandle = ASC->MakeOutgoingSpec(
+        UCombatStaminaUsedResetGameplayEffect::StaticClass(), 1.0f,
+        ASC->MakeEffectContext());
+    if (ResetSpecHandle.IsValid()) {
+      ASC->ApplyGameplayEffectSpecToTarget(*ResetSpecHandle.Data.Get(), ASC);
+    }
+  }
+
   // Call the character's attack montage ended function
   if (AActor *Avatar = GetCurrentActorInfo()->AvatarActor.Get()) {
     if (ACombatBase *CombatBase = Cast<ACombatBase>(Avatar)) {
@@ -148,12 +209,6 @@ void UCombatChargedAttackAbility::EndAbility(
     const FGameplayAbilityActorInfo *ActorInfo,
     const FGameplayAbilityActivationInfo ActivationInfo,
     bool bReplicateEndAbility, bool bWasCancelled) {
-  // Reset attacking flag
-  ACombatBase *CombatBase = GetCombatBaseFromActorInfo();
-  if (CombatBase) {
-    CombatBase->SetIsAttacking(false);
-  }
-
   // Stop montage only if cancelled
   if (bWasCancelled && ChargedAttackMontage) {
     if (UAnimInstance *AnimInstance = ActorInfo->GetAnimInstance()) {
@@ -170,7 +225,8 @@ void UCombatChargedAttackAbility::EndAbility(
   }
 
   // Remove event listeners
-  if (UAbilitySystemComponent *ASC = GetAbilitySystemComponentFromActorInfo()) {
+  if (UAbilitySystemComponent *ASC =
+          GetAbilitySystemComponent(CurrentActorInfo)) {
     ASC->GenericGameplayEventCallbacks
         .FindOrAdd(FGameplayTag::RequestGameplayTag(
             FName("Event.Attack.Charged.Loop")))
@@ -187,6 +243,41 @@ void UCombatChargedAttackAbility::EndAbility(
 
 void UCombatChargedAttackAbility::HandleChargedAttackLoop(
     const FGameplayEventData *EventData) {
+  // Apply stamina cost for each loop like a combo hit
+  UAbilitySystemComponent *ASC = GetAbilitySystemComponent(CurrentActorInfo);
+  if (ASC && StaminaCosts.Num() > 0) {
+    float StaminaCost = StaminaCosts[0]; // Use first cost for all loops
+
+    // Check if we have enough stamina
+    float CurrentStamina =
+        ASC->GetNumericAttribute(UStaminaAttributeSet::GetStaminaAttribute());
+    if (CurrentStamina < StaminaCost) {
+      // Not enough stamina, for enemies set to 0 to refill, automatically
+      // release the attack
+      if (!bIsPlayerControlled) {
+        ASC->SetNumericAttributeBase(
+            UStaminaAttributeSet::GetStaminaAttribute(), 0.0f);
+      }
+      HandleChargedAttackRelease(EventData);
+      bAutoReleased = true;
+      return;
+    }
+
+    // Apply stamina cost effect
+    FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(
+        StaminaCostEffectClass, GetAbilityLevel(), ASC->MakeEffectContext());
+    if (SpecHandle.IsValid()) {
+      // Set the stamina cost using SetByCaller
+      SpecHandle.Data.Get()->SetSetByCallerMagnitude(
+          FGameplayTag::RequestGameplayTag(FName("Data.StaminaCost")),
+          -StaminaCost);
+      ASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), ASC);
+    }
+
+    // Update total stamina used
+    TotalStaminaUsed += StaminaCost;
+  }
+
   if (bIsPlayerControlled) {
     // For player, always loop if still holding
     if (UAnimInstance *AnimInstance =
@@ -216,20 +307,28 @@ void UCombatChargedAttackAbility::HandleChargedAttackLoop(
 
 void UCombatChargedAttackAbility::HandleChargedAttackRelease(
     const FGameplayEventData *EventData) {
-  if (!bIsPlayerControlled && CurrentChargeLoop < TargetChargeLoops) {
-    // For AI, if not enough loops, continue looping
-    CurrentChargeLoop++;
-    if (UAnimInstance *AnimInstance =
-            GetCurrentActorInfo()->GetAnimInstance()) {
-      AnimInstance->Montage_JumpToSection(ChargeLoopSection,
-                                          ChargedAttackMontage);
+  // If already auto-released due to insufficient stamina, do nothing
+  if (bAutoReleased) {
+    return;
+  }
+
+  // Set stamina used for damage scaling via GE
+  UAbilitySystemComponent *ASC =
+      GetAbilitySystemComponent(GetCurrentActorInfo());
+  if (ASC) {
+    FGameplayEffectSpecHandle UsedSpecHandle = ASC->MakeOutgoingSpec(
+        StaminaUsedEffectClass, 1.0f, ASC->MakeEffectContext());
+    if (UsedSpecHandle.IsValid()) {
+      UsedSpecHandle.Data.Get()->SetSetByCallerMagnitude(
+          FGameplayTag::RequestGameplayTag(FName("Data.StaminaUsed")),
+          TotalStaminaUsed);
+      ASC->ApplyGameplayEffectSpecToTarget(*UsedSpecHandle.Data.Get(), ASC);
     }
-  } else {
-    // Release attack
-    if (UAnimInstance *AnimInstance =
-            GetCurrentActorInfo()->GetAnimInstance()) {
-      AnimInstance->Montage_JumpToSection(ChargeAttackSection,
-                                          ChargedAttackMontage);
-    }
+  }
+
+  // Release attack
+  if (UAnimInstance *AnimInstance = GetCurrentActorInfo()->GetAnimInstance()) {
+    AnimInstance->Montage_JumpToSection(ChargeAttackSection,
+                                        ChargedAttackMontage);
   }
 }

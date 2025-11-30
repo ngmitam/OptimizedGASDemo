@@ -14,6 +14,8 @@
 #include "AbilitySystemComponent.h"
 #include "Attributes/HealthAttributeSet.h"
 #include "Attributes/DamageAttributeSet.h"
+#include "Attributes/StaminaAttributeSet.h"
+#include "Attributes/MovementAttributeSet.h"
 #include "GameplayTagsManager.h"
 #include "Abilities/CombatReceiveDamageAbility.h"
 #include "Abilities/CombatDeathAbility.h"
@@ -22,8 +24,12 @@
 #include "Abilities/CombatComboAttackAbility.h"
 #include "Abilities/CombatNotifyEnemiesAbility.h"
 #include "Abilities/CombatLockableAbility.h"
+#include "Abilities/CombatLockToggleAbility.h"
+#include "Abilities/CombatLockToggleAbility.h"
 #include "Effects/CombatDamageGameplayEffect.h"
 #include "Data/CombatAttackEventData.h"
+#include "Data/CombatPawnData.h"
+#include "Abilities/CombatAbilitySet.h"
 
 /** Constructor */
 ACombatEnemy::ACombatEnemy() {
@@ -31,14 +37,6 @@ ACombatEnemy::ACombatEnemy() {
 
   // bind the attack montage ended delegate
   OnAttackMontageEnded.BindUObject(this, &ACombatEnemy::AttackMontageEnded);
-
-  // create the life bar widget component
-  LifeBar = CreateDefaultSubobject<UWidgetComponent>(TEXT("LifeBar"));
-  LifeBar->SetupAttachment(RootComponent);
-
-  // create the health component
-  HealthComponent =
-      CreateDefaultSubobject<UCombatHealthComponent>(TEXT("HealthComponent"));
 
   // create the ability system component
   AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(
@@ -49,36 +47,15 @@ ACombatEnemy::ACombatEnemy() {
       CreateDefaultSubobject<UHealthAttributeSet>(TEXT("HealthAttributeSet"));
   DamageAttributeSet =
       CreateDefaultSubobject<UDamageAttributeSet>(TEXT("DamageAttributeSet"));
+  StaminaAttributeSet =
+      CreateDefaultSubobject<UStaminaAttributeSet>(TEXT("StaminaAttributeSet"));
+  MovementAttributeSet = CreateDefaultSubobject<UMovementAttributeSet>(
+      TEXT("MovementAttributeSet"));
 
-  // Add attribute sets to ASC
-  // Note: Attribute sets are now added from AbilitySets in PawnData or as
-  // fallback
-  // AbilitySystemComponent->AddAttributeSetSubobject(HealthAttributeSet);
-  // AbilitySystemComponent->AddAttributeSetSubobject(DamageAttributeSet);
-
-  // Create default pawn data with abilities
-  PawnData = CreateDefaultSubobject<UCombatPawnData>(TEXT("PawnData"));
+  // Add lockable ability for enemy
   if (PawnData) {
-    // Set attribute sets
-    PawnData->AttributeSets.Add(UHealthAttributeSet::StaticClass());
-    PawnData->AttributeSets.Add(UDamageAttributeSet::StaticClass());
-
-    // Set default attributes
-    PawnData->DefaultHealth = MaxHP;
-    PawnData->DefaultMaxHealth = MaxHP;
-    PawnData->DefaultDamage = MeleeDamage;
-    PawnData->DefaultKnockbackImpulse = MeleeKnockbackImpulse;
-    PawnData->DefaultLaunchImpulse = MeleeLaunchImpulse;
-
-    // Set default abilities (fallback when no AbilitySets are configured)
-    PawnData->GrantedAbilities.Add(UCombatReceiveDamageAbility::StaticClass());
-    PawnData->GrantedAbilities.Add(UCombatDeathAbility::StaticClass());
-    PawnData->GrantedAbilities.Add(UCombatTraceAttackAbility::StaticClass());
-    PawnData->GrantedAbilities.Add(UCombatChargedAttackAbility::StaticClass());
-    PawnData->GrantedAbilities.Add(UCombatComboAttackAbility::StaticClass());
     PawnData->GrantedAbilities.Add(UCombatLockableAbility::StaticClass());
-
-    // Note: Abilities are now configured via AbilitySets in PawnData
+    PawnData->DefaultDamage = 10.0f;
   }
 
   // set the AI Controller class by default
@@ -100,23 +77,17 @@ ACombatEnemy::ACombatEnemy() {
   CurrentHP = MaxHP;
 }
 
-void ACombatEnemy::DoAIComboAttack() {
-  // ignore if we're already playing an attack animation
-  if (bIsAttacking) {
-    return;
-  }
+UAbilitySystemComponent *ACombatEnemy::GetAbilitySystemComponent() const {
+  return AbilitySystemComponent;
+}
 
+void ACombatEnemy::DoAIComboAttack() {
   // Send gameplay event to activate combo attack ability
   SendGameplayEvent(
       FGameplayTag::RequestGameplayTag(FName("Event.Attack.Combo.Start")));
 }
 
 void ACombatEnemy::DoAIChargedAttack() {
-  // ignore if we're already playing an attack animation
-  if (bIsAttacking) {
-    return;
-  }
-
   // Send gameplay event to activate charged attack ability
   SendGameplayEvent(
       FGameplayTag::RequestGameplayTag(FName("Event.Attack.Charged.Start")));
@@ -136,9 +107,6 @@ void ACombatEnemy::HandleDeath() {
 
   // hide the life bar
   LifeBar->SetHiddenInGame(true);
-
-  // enable full ragdoll physics
-  GetMesh()->SetSimulatePhysics(true);
 
   // call the died delegate to notify any subscribers
   OnEnemyDied.Broadcast();
@@ -160,15 +128,13 @@ void ACombatEnemy::Landed(const FHitResult &Hit) {
 void ACombatEnemy::BeginPlay() {
   // reset HP to maximum (keep this for StateTree compatibility)
   CurrentHP = MaxHP;
+  // Initialize ability system components
+  InitializeAbilitySystemComponents();
+
+  // Initialize pawn data if available
+  InitializePawnData();
 
   Super::BeginPlay();
-
-  // get the life bar widget from the widget comp
-  LifeBarWidget = Cast<UCombatLifeBar>(LifeBar->GetUserWidgetObject());
-  check(LifeBarWidget);
-
-  // fill the life bar
-  LifeBarWidget->SetLifePercentage(1.0f);
 }
 
 void ACombatEnemy::EndPlay(EEndPlayReason::Type EndPlayReason) {
@@ -176,4 +142,138 @@ void ACombatEnemy::EndPlay(EEndPlayReason::Type EndPlayReason) {
 
   // clear the death timer
   GetWorld()->GetTimerManager().ClearTimer(DeathTimer);
+}
+
+void ACombatEnemy::InitializeAbilitySystemComponents() {
+  UAbilitySystemComponent *ASC = GetAbilitySystemComponent();
+  if (!ASC) {
+    return;
+  }
+
+  if (!ASC->GetAvatarActor_Direct()) {
+    ASC->InitAbilityActorInfo(this, this);
+  }
+
+  // Add attribute sets to the ASC
+  if (HealthAttributeSet) {
+    ASC->AddAttributeSetSubobject(HealthAttributeSet);
+  }
+  if (DamageAttributeSet) {
+    ASC->AddAttributeSetSubobject(DamageAttributeSet);
+  }
+  if (StaminaAttributeSet) {
+    ASC->AddAttributeSetSubobject(StaminaAttributeSet);
+  }
+  if (MovementAttributeSet) {
+    ASC->AddAttributeSetSubobject(MovementAttributeSet);
+  }
+
+  // Initialize health component
+  if (HealthComponent) {
+    HealthComponent->InitializeWithAbilitySystem(ASC);
+  }
+
+  // Initialize stamina component
+  if (StaminaComponent) {
+    StaminaComponent->InitializeWithAbilitySystem(ASC);
+  }
+
+  // Initialize movement attributes and bind delegate
+  InitializeMovementAttributes(ASC);
+}
+
+void ACombatEnemy::InitializePawnData() {
+  if (!PawnData) {
+    return;
+  }
+
+  UAbilitySystemComponent *ASC = GetAbilitySystemComponent();
+  if (!ASC) {
+    return;
+  }
+
+  // Load from data table if specified
+  PawnData->LoadFromDataTable();
+
+  // Grant ability sets (server-only for multiplayer safety)
+  if (HasAuthority()) {
+    bool bHasAbilitySets = false;
+    for (const FCombatAbilitySetWithInput &AbilitySetWithInput :
+         PawnData->AbilitySets) {
+      if (AbilitySetWithInput.AbilitySet) {
+        FCombatAbilitySetHandle AbilitySetHandle;
+        AbilitySetWithInput.AbilitySet->GiveToAbilitySystem(
+            ASC, AbilitySetHandle, this);
+        bHasAbilitySets = true;
+      }
+    }
+
+    // Fallback: If no ability sets are configured, add attribute sets directly
+    if (!bHasAbilitySets) {
+      for (TSubclassOf<UAttributeSet> AttributeSetClass :
+           PawnData->AttributeSets) {
+        if (AttributeSetClass) {
+          UAttributeSet *NewAttributeSet =
+              NewObject<UAttributeSet>(ASC->GetOwner(), AttributeSetClass);
+          ASC->AddAttributeSetSubobject(NewAttributeSet);
+        }
+      }
+
+      // Fallback: Grant abilities directly if no ability sets (only if not
+      // already granted)
+      for (TSubclassOf<UGameplayAbility> AbilityClass :
+           PawnData->GrantedAbilities) {
+        if (AbilityClass && !ASC->FindAbilitySpecFromClass(AbilityClass)) {
+          FGameplayAbilitySpec AbilitySpec(AbilityClass, 1);
+          ASC->GiveAbility(AbilitySpec);
+        }
+      }
+
+      // Fallback: Apply granted effects directly (only if not already active)
+      for (TSubclassOf<UGameplayEffect> EffectClass :
+           PawnData->GrantedEffects) {
+        if (EffectClass) {
+          FGameplayEffectQuery Query;
+          Query.EffectDefinition = EffectClass;
+          TArray<FActiveGameplayEffectHandle> ActiveEffects =
+              ASC->GetActiveEffects(Query);
+          if (ActiveEffects.Num() == 0) {
+            FGameplayEffectSpecHandle EffectSpecHandle = ASC->MakeOutgoingSpec(
+                EffectClass, 1.0f, ASC->MakeEffectContext());
+            if (EffectSpecHandle.IsValid()) {
+              ASC->ApplyGameplayEffectSpecToTarget(*EffectSpecHandle.Data.Get(),
+                                                   ASC);
+            }
+          }
+        }
+      }
+
+      // Set attributes from pawn data
+      ASC->SetNumericAttributeBase(UHealthAttributeSet::GetHealthAttribute(),
+                                   PawnData->DefaultHealth);
+      ASC->SetNumericAttributeBase(UHealthAttributeSet::GetMaxHealthAttribute(),
+                                   PawnData->DefaultMaxHealth);
+      ASC->SetNumericAttributeBase(UStaminaAttributeSet::GetStaminaAttribute(),
+                                   PawnData->DefaultStamina);
+      ASC->SetNumericAttributeBase(
+          UStaminaAttributeSet::GetMaxStaminaAttribute(),
+          PawnData->DefaultMaxStamina);
+      ASC->SetNumericAttributeBase(UDamageAttributeSet::GetDamageAttribute(),
+                                   PawnData->DefaultDamage);
+      ASC->SetNumericAttributeBase(
+          UDamageAttributeSet::GetKnockbackImpulseAttribute(),
+          PawnData->DefaultKnockbackImpulse);
+      ASC->SetNumericAttributeBase(
+          UDamageAttributeSet::GetLaunchImpulseAttribute(),
+          PawnData->DefaultLaunchImpulse);
+    }
+  }
+}
+
+void ACombatEnemy::HandleMovementSpeedChanged(
+    const FOnAttributeChangeData &Data) {
+  // Update the enemy's movement speed based on the GAS attribute
+  if (GetCharacterMovement()) {
+    GetCharacterMovement()->MaxWalkSpeed = Data.NewValue;
+  }
 }

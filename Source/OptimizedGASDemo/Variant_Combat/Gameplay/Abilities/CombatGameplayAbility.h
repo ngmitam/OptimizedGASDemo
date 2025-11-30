@@ -46,4 +46,12 @@ protected:
 
   /** Returns the CombatBase that owns this ability */
   class ACombatBase *GetCombatBaseFromActorInfo() const;
+
+  /**
+   * Get the correct AbilitySystemComponent for this ability.
+   * For players, returns ASC from PlayerState to ensure consistency.
+   * For enemies, returns ASC from ActorInfo.
+   */
+  UAbilitySystemComponent *
+  GetAbilitySystemComponent(const FGameplayAbilityActorInfo *ActorInfo) const;
 };

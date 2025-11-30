@@ -9,6 +9,7 @@
 #include "Kismet/KismetSystemLibrary.h"
 #include "Effects/CombatDamageGameplayEffect.h"
 #include "Attributes/DamageAttributeSet.h"
+#include "Gameplay/Attributes/StaminaAttributeSet.h"
 #include "Data/CombatAttackEventData.h"
 
 UCombatTraceAttackAbility::UCombatTraceAttackAbility() {
@@ -67,11 +68,11 @@ void UCombatTraceAttackAbility::PerformAttackTrace() {
   AActor *AvatarActor = CurrentActorInfo->AvatarActor.Get();
 
   // Get damage from GAS attribute
-  UAbilitySystemComponent *ASC = GetAbilitySystemComponentFromActorInfo();
+  UAbilitySystemComponent *ASC = GetAbilitySystemComponent(CurrentActorInfo);
   float Damage = DamageAmount;
   if (ASC) {
-    Damage =
-        ASC->GetNumericAttribute(UDamageAttributeSet::GetDamageAttribute());
+    Damage = DamageAmount + ASC->GetNumericAttribute(
+                                UDamageAttributeSet::GetDamageAttribute());
   }
 
   // Get knockback and launch from GAS attributes
@@ -103,6 +104,18 @@ void UCombatTraceAttackAbility::PerformAttackTrace() {
       DamageSourceBone = AttackData->DamageSourceBone;
     }
   }
+
+  // Get stamina used from GAS attribute for damage scaling
+  float StaminaUsed = 0.0f;
+  if (ASC) {
+    StaminaUsed = ASC->GetNumericAttribute(
+        UStaminaAttributeSet::GetStaminaUsedAttribute());
+  }
+
+  // Scale damage based on stamina used (higher stamina cost = higher damage)
+  // Damage multiplier: base damage + (stamina used * 1.5)
+  float StaminaDamageMultiplier = 1.0f + (StaminaUsed * 1.5f);
+  Damage *= StaminaDamageMultiplier;
 
   if (ACharacter *Character = Cast<ACharacter>(AvatarActor)) {
     if (Character->GetMesh()) {

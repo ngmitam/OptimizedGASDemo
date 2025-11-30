@@ -25,25 +25,41 @@ public:
   virtual void GetLifetimeReplicatedProps(
       TArray<FLifetimeProperty> &OutLifetimeProps) const override;
 
-  /** Find and lock onto the nearest target */
-  void LockOntoTarget();
-
-  /** Unlock from current target */
-  void UnlockTarget();
-
   /** Get the currently locked target */
   AActor *GetLockedTarget() const { return LockedTarget; }
 
   /** Check if we have a locked target */
   bool HasLockedTarget() const { return LockedTarget != nullptr; }
 
-  /** Check if the current target is still valid */
-  bool IsTargetStillValid() const;
+  /** Set the locked target (for ability use) */
+  void SetLockedTarget(AActor *NewTarget) {
+    LockedTarget = NewTarget;
+    bIsLocked = (LockedTarget != nullptr);
+  }
 
-  /** Draw debug trace visualization */
-  void DrawDebugTrace(const FVector &StartLocation, const FVector &EndLocation,
-                      const FCollisionShape &SphereShape,
-                      const TArray<FHitResult> &HitResults, AActor *BestTarget);
+  /** Set lock state (for ability use) */
+  void SetIsLocked(bool bLocked) { bIsLocked = bLocked; }
+
+  /** Get lock state */
+  bool GetIsLocked() const { return bIsLocked; }
+
+  /** Get max lock distance */
+  float GetMaxLockDistance() const { return MaxLockDistance; }
+
+  /** Get lock cone angle */
+  float GetLockConeAngle() const { return LockConeAngle; }
+
+  /** Get lock decal material */
+  UMaterialInterface *GetLockDecalMaterial() const { return LockDecalMaterial; }
+
+  /** Get lock decal */
+  UDecalComponent *GetLockDecal() const { return LockDecal; }
+
+  /** Set lock decal */
+  void SetLockDecal(UDecalComponent *NewDecal) { LockDecal = NewDecal; }
+
+  /** Client prediction for lock toggle */
+  void Client_PredictToggleLock();
 
 protected:
   /** Called when locked target changes */
@@ -56,9 +72,6 @@ protected:
 
 protected:
   virtual void BeginPlay() override;
-
-  /** Draw debug information */
-  void DrawDebugInfo();
 
   /** The currently locked target */
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Lock System",

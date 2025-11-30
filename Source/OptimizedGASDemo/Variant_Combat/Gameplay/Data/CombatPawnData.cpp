@@ -47,3 +47,54 @@ void UCombatPawnData::LoadFromDataTable() {
     }
   }
 }
+
+TArray<TSubclassOf<UGameplayAbility>>
+UCombatPawnData::GetAllGrantedAbilities() const {
+  TArray<TSubclassOf<UGameplayAbility>> AllAbilities;
+
+  // Add abilities from AbilitySets
+  for (const FCombatAbilitySetWithInput &AbilitySetWithInput : AbilitySets) {
+    if (UCombatAbilitySet *AbilitySet = AbilitySetWithInput.AbilitySet.Get()) {
+      for (const FGameplayAbilityBindInfo &BindInfo : AbilitySet->Abilities) {
+        if (BindInfo.GameplayAbilityClass) {
+          AllAbilities.AddUnique(BindInfo.GameplayAbilityClass);
+        }
+      }
+    }
+  }
+
+  // Add legacy abilities
+  for (TSubclassOf<UGameplayAbility> AbilityClass : GrantedAbilities) {
+    if (AbilityClass) {
+      AllAbilities.AddUnique(AbilityClass);
+    }
+  }
+
+  return AllAbilities;
+}
+
+TArray<TSubclassOf<UGameplayEffect>>
+UCombatPawnData::GetAllGrantedEffects() const {
+  TArray<TSubclassOf<UGameplayEffect>> AllEffects;
+
+  // Add effects from AbilitySets
+  for (const FCombatAbilitySetWithInput &AbilitySetWithInput : AbilitySets) {
+    if (UCombatAbilitySet *AbilitySet = AbilitySetWithInput.AbilitySet.Get()) {
+      for (const FGameplayEffectApplicationInfo &EffectInfo :
+           AbilitySet->GrantedGameplayEffects) {
+        if (EffectInfo.GameplayEffect) {
+          AllEffects.AddUnique(EffectInfo.GameplayEffect);
+        }
+      }
+    }
+  }
+
+  // Add legacy effects
+  for (TSubclassOf<UGameplayEffect> EffectClass : GrantedEffects) {
+    if (EffectClass) {
+      AllEffects.AddUnique(EffectClass);
+    }
+  }
+
+  return AllEffects;
+}

@@ -6,8 +6,8 @@
 #include "CombatLifeBar.h"
 #include "CombatPlayerController.h"
 #include "CombatPlayerState.h"
-#include "Attributes/HealthAttributeSet.h"
-#include "Attributes/DamageAttributeSet.h"
+#include "Attributes/StaminaAttributeSet.h"
+#include "Attributes/MovementAttributeSet.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/WidgetComponent.h"
@@ -33,12 +33,10 @@ ACombatCharacter::ACombatCharacter() {
   // bind the attack montage ended delegate
   OnAttackMontageEnded.BindUObject(this, &ACombatCharacter::AttackMontageEnded);
 
-  // Set size for collision capsule
-  GetCapsuleComponent()->InitCapsuleSize(35.0f, 90.0f);
-
   // Configure character movement
+  OriginalMaxWalkSpeed = 600.0f;
   GetCharacterMovement()->MaxWalkSpeed =
-      600.0f; // Increased for better combat mobility
+      OriginalMaxWalkSpeed; // Increased for better combat mobility
   GetCharacterMovement()->MaxAcceleration = 2000.0f; // Faster acceleration
   GetCharacterMovement()->GroundFriction = 8.0f;     // Better control
   GetCharacterMovement()->BrakingFrictionFactor = 1.0f;
@@ -62,61 +60,27 @@ ACombatCharacter::ACombatCharacter() {
   FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
   FollowCamera->bUsePawnControlRotation = false;
 
-  // create the life bar widget component
-  LifeBar = CreateDefaultSubobject<UWidgetComponent>(TEXT("LifeBar"));
-  LifeBar->SetupAttachment(RootComponent);
-
-  // create the health component
-  HealthComponent =
-      CreateDefaultSubobject<UCombatHealthComponent>(TEXT("HealthComponent"));
-
-  // create the ability system component
-  AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(
-      TEXT("AbilitySystemComponent"));
-
-  // create the attribute sets
-  HealthAttributeSet =
-      CreateDefaultSubobject<UHealthAttributeSet>(TEXT("HealthAttributeSet"));
-  DamageAttributeSet =
-      CreateDefaultSubobject<UDamageAttributeSet>(TEXT("DamageAttributeSet"));
-
-  // Add attribute sets to ASC
-  // Note: Attribute sets are now added from AbilitySets in PawnData or as
-  // fallback
-  // AbilitySystemComponent->AddAttributeSetSubobject(HealthAttributeSet);
-  // AbilitySystemComponent->AddAttributeSetSubobject(DamageAttributeSet);
-
-  // Create default pawn data with abilities
-  PawnData = CreateDefaultSubobject<UCombatPawnData>(TEXT("PawnData"));
-  if (PawnData) {
-    // Set attribute sets
-    PawnData->AttributeSets.Add(UHealthAttributeSet::StaticClass());
-    PawnData->AttributeSets.Add(UDamageAttributeSet::StaticClass());
-
-    // Set default attributes
-    PawnData->DefaultHealth = MaxHP;
-    PawnData->DefaultMaxHealth = MaxHP;
-    PawnData->DefaultDamage = MeleeDamage;
-    PawnData->DefaultKnockbackImpulse = MeleeKnockbackImpulse;
-    PawnData->DefaultLaunchImpulse = MeleeLaunchImpulse;
-
-    // Set default abilities (fallback when no AbilitySets are configured)
-    PawnData->GrantedAbilities.Add(UCombatReceiveDamageAbility::StaticClass());
-    PawnData->GrantedAbilities.Add(UCombatDeathAbility::StaticClass());
-    PawnData->GrantedAbilities.Add(UCombatTraceAttackAbility::StaticClass());
-    PawnData->GrantedAbilities.Add(UCombatChargedAttackAbility::StaticClass());
-    PawnData->GrantedAbilities.Add(UCombatComboAttackAbility::StaticClass());
-    PawnData->GrantedAbilities.Add(UCombatLockToggleAbility::StaticClass());
-
-    // Note: Abilities are now configured via AbilitySets in PawnData
-  }
-
   // create the lock system component
   LockSystemComponent = CreateDefaultSubobject<UCombatLockSystemComponent>(
       TEXT("LockSystemComponent"));
 
+  // Add lock toggle ability for player
+  if (PawnData) {
+    PawnData->GrantedAbilities.Add(UCombatLockToggleAbility::StaticClass());
+    PawnData->DefaultDamage = 10.0f;
+  }
+
   // set the player tag
   Tags.Add(FName("Player"));
+}
+
+UAbilitySystemComponent *ACombatCharacter::GetAbilitySystemComponent() const {
+  // Per Lyra standard, player characters get GAS from PlayerState
+  if (ACombatPlayerState *PS = Cast<ACombatPlayerState>(GetPlayerState())) {
+    return PS->GetAbilitySystemComponent();
+  }
+  // Fallback to base implementation for enemies or other cases
+  return Super::GetAbilitySystemComponent();
 }
 
 void ACombatCharacter::Move(const FInputActionValue &Value) {
@@ -163,36 +127,56 @@ void ACombatCharacter::ToggleCamera() {
 }
 
 void ACombatCharacter::LockPressed() {
+  // Prevent rapid lock presses
+  float CurrentTime = GetWorld()->GetTimeSeconds();
+  if (CurrentTime - LastLockPressTime < 0.2f) {
+    return;
+  }
+  LastLockPressTime = CurrentTime;
+
+  // Client prediction
+  if (!HasAuthority()) {
+    if (LockSystemComponent) {
+      LockSystemComponent->Client_PredictToggleLock();
+    }
+  }
+
   // Send gameplay event to toggle lock
   SendGameplayEvent(
       FGameplayTag::RequestGameplayTag(FName("Event.Lock.Toggle")));
 }
 
 void ACombatCharacter::UpdateCameraLock(float DeltaTime) {
-  if (LockSystemComponent && LockSystemComponent->HasLockedTarget()) {
+  if (HasLockedTarget()) {
     AActor *Target = LockSystemComponent->GetLockedTarget();
-    if (Target && CameraBoom) {
+    if (Target) {
+      if (!CameraBoom) {
+        return;
+      }
       FVector CameraLocation = CameraBoom->GetComponentLocation();
       FVector TargetLocation = Target->GetActorLocation();
       FRotator DesiredRotation = (TargetLocation - CameraLocation).Rotation();
 
-      // Dynamic camera distance based on combat state
-      float TargetDistance =
-          bIsAttacking ? CombatCameraDistance : ExplorationCameraDistance;
       CameraBoom->TargetArmLength = FMath::FInterpTo(
-          CameraBoom->TargetArmLength, TargetDistance, DeltaTime, 5.0f);
+          CameraBoom->TargetArmLength, CombatCameraDistance, DeltaTime, 5.0f);
 
       // Smooth interpolation to target rotation
+      FRotator CurrentRelativeRotation = CameraBoom->GetRelativeRotation();
+      FRotator TargetRelativeRotation = DesiredRotation - GetActorRotation();
+      TargetRelativeRotation = TargetRelativeRotation.GetNormalized();
+
       if (!bCameraLocked) {
         // First time locking, snap to avoid delay
-        CameraBoom->SetWorldRotation(DesiredRotation);
+        CameraBoom->bUsePawnControlRotation =
+            false; // Disable pawn control to manually control rotation
+        CameraBoom->SetRelativeRotation(TargetRelativeRotation);
         bCameraLocked = true;
       } else {
         // Interpolate smoothly
-        FRotator CurrentRotation = CameraBoom->GetComponentRotation();
-        FRotator NewRotation = FMath::RInterpTo(
-            CurrentRotation, DesiredRotation, DeltaTime, CameraLockInterpSpeed);
-        CameraBoom->SetWorldRotation(NewRotation);
+        FRotator NewRotation =
+            FMath::RInterpTo(CurrentRelativeRotation, TargetRelativeRotation,
+                             DeltaTime, CameraLockInterpSpeed);
+        CameraBoom->SetRelativeRotation(NewRotation);
       }
 
       // Make the character face the target for movement
@@ -201,21 +185,6 @@ void ACombatCharacter::UpdateCameraLock(float DeltaTime) {
             (TargetLocation - GetActorLocation()).Rotation();
         CharacterRotation.Pitch = 0.0f; // Keep the character level
         GetController()->SetControlRotation(CharacterRotation);
-      }
-    }
-
-    // Check if target is still valid, if not, unlock
-    if (!LockSystemComponent->IsTargetStillValid()) {
-      LockSystemComponent->UnlockTarget();
-      bCameraLocked = false;
-      // Re-enable pawn control rotation
-      if (CameraBoom) {
-        CameraBoom->bUsePawnControlRotation = true;
-      }
-      // Remove locked state tag
-      if (AbilitySystemComponent) {
-        AbilitySystemComponent->RemoveLooseGameplayTag(
-            FGameplayTag::RequestGameplayTag(FName("State.Locked")));
       }
     }
   } else {
@@ -233,9 +202,6 @@ void ACombatCharacter::AttackMontageEnded(UAnimMontage *Montage,
                                           bool bInterrupted) {
   // Call parent to reset attacking flag
   Super::AttackMontageEnded(Montage, bInterrupted);
-
-  // Execute any buffered attack
-  ExecuteBufferedAttack();
 }
 
 void ACombatCharacter::Tick(float DeltaTime) {
@@ -278,27 +244,17 @@ void ACombatCharacter::DoComboAttackStart() {
   // Cache the input time for combo system
   SetCachedComboAttackInputTime(GetWorld()->GetTimeSeconds());
 
-  // Check if we can attack immediately
-  if (!bIsAttacking) {
-    // Send gameplay event to activate combo attack ability
-    SendGameplayEvent(
-        FGameplayTag::RequestGameplayTag(FName("Event.Attack.Combo.Start")));
+  // Send gameplay event to activate combo attack ability
+  SendGameplayEvent(
+      FGameplayTag::RequestGameplayTag(FName("Event.Attack.Combo.Start")));
 
-    // Add camera shake for feedback
-    if (AttackCameraShake) {
-      if (APlayerController *PC = Cast<APlayerController>(GetController())) {
-        if (PC->PlayerCameraManager) {
-          PC->PlayerCameraManager->StartCameraShake(AttackCameraShake);
-        }
+  // Add camera shake for feedback
+  if (AttackCameraShake) {
+    if (APlayerController *PC = Cast<APlayerController>(GetController())) {
+      if (PC->PlayerCameraManager) {
+        PC->PlayerCameraManager->StartCameraShake(AttackCameraShake);
       }
     }
-  } else {
-    // Buffer the attack input
-    bAttackBuffered = true;
-    BufferedAttackType = 1; // Combo
-    GetWorld()->GetTimerManager().SetTimer(AttackBufferTimer, this,
-                                           &ACombatCharacter::ClearAttackBuffer,
-                                           AttackBufferTime, false);
   }
 }
 
@@ -310,50 +266,31 @@ void ACombatCharacter::DoChargedAttackStart() {
   // Store current velocity for momentum preservation
   StoredVelocity = GetVelocity();
 
-  // raise the charging attack flag
-  bIsChargingAttack = true;
+  // Send gameplay event to activate charged attack ability
+  SendGameplayEvent(
+      FGameplayTag::RequestGameplayTag(FName("Event.Attack.Charged.Start")));
 
-  if (!bIsAttacking) {
-    // Send gameplay event to activate charged attack ability
-    SendGameplayEvent(
-        FGameplayTag::RequestGameplayTag(FName("Event.Attack.Charged.Start")));
-
-    // Add camera shake for feedback
-    if (AttackCameraShake) {
-      if (APlayerController *PC = Cast<APlayerController>(GetController())) {
-        if (PC->PlayerCameraManager) {
-          PC->PlayerCameraManager->StartCameraShake(AttackCameraShake);
-        }
+  // Add camera shake for feedback
+  if (AttackCameraShake) {
+    if (APlayerController *PC = Cast<APlayerController>(GetController())) {
+      if (PC->PlayerCameraManager) {
+        PC->PlayerCameraManager->StartCameraShake(AttackCameraShake);
       }
     }
-  } else {
-    // Buffer the attack input
-    bAttackBuffered = true;
-    BufferedAttackType = 2; // Charged
-    GetWorld()->GetTimerManager().SetTimer(AttackBufferTimer, this,
-                                           &ACombatCharacter::ClearAttackBuffer,
-                                           AttackBufferTime, false);
   }
 }
 
 void ACombatCharacter::DoChargedAttackEnd() {
-  // lower the charging attack flag
-  bIsChargingAttack = false;
+  // Send release event
+  UAbilitySystemComponent *ASC = GetAbilitySystemComponent();
+  if (ASC) {
+    FGameplayEventData EventData;
+    EventData.Instigator = this;
+    EventData.Target = this;
 
-  // if we've done the charge loop at least once, release the charged attack
-  // right away
-  if (bHasLoopedChargedAttack) {
-    // Send release event
-    if (AbilitySystemComponent) {
-      FGameplayEventData EventData;
-      EventData.Instigator = this;
-      EventData.Target = this;
-
-      AbilitySystemComponent->HandleGameplayEvent(
-          FGameplayTag::RequestGameplayTag(
-              FName("Event.Attack.Charged.Release")),
-          &EventData);
-    }
+    ASC->HandleGameplayEvent(
+        FGameplayTag::RequestGameplayTag(FName("Event.Attack.Charged.Release")),
+        &EventData);
   }
 }
 
@@ -370,10 +307,6 @@ void ACombatCharacter::Landed(const FHitResult &Hit) {
 
 void ACombatCharacter::BeginPlay() {
   Super::BeginPlay();
-
-  // get the life bar from the widget component
-  LifeBarWidget = Cast<UCombatLifeBar>(LifeBar->GetUserWidgetObject());
-  check(LifeBarWidget);
 
   // initialize the camera
   GetCameraBoom()->TargetArmLength = DefaultCameraDistance;
@@ -441,6 +374,11 @@ void ACombatCharacter::SetupPlayerInputComponent(
 void ACombatCharacter::NotifyControllerChanged() {
   Super::NotifyControllerChanged();
 
+  // Set pawn data on player state for GAS management per Lyra standard
+  if (ACombatPlayerState *PS = Cast<ACombatPlayerState>(GetPlayerState())) {
+    PS->SetPawnData(PawnData);
+  }
+
   // update the respawn transform on the Player Controller
   if (ACombatPlayerController *PC =
           Cast<ACombatPlayerController>(GetController())) {
@@ -455,38 +393,56 @@ void ACombatCharacter::RespawnCharacter() {
   // The PlayerController will handle spawning a new one
 }
 
-void ACombatCharacter::LockOntoTarget() {
-  if (LockSystemComponent) {
-    LockSystemComponent->LockOntoTarget();
-  }
-}
-
-void ACombatCharacter::UnlockTarget() {
-  if (LockSystemComponent) {
-    LockSystemComponent->UnlockTarget();
-  }
-}
-
 bool ACombatCharacter::HasLockedTarget() const {
   return LockSystemComponent && LockSystemComponent->HasLockedTarget();
 }
 
-void ACombatCharacter::ClearAttackBuffer() {
-  bAttackBuffered = false;
-  BufferedAttackType = 0;
+void ACombatCharacter::PossessedBy(AController *NewController) {
+  Super::PossessedBy(NewController);
+
+  // Set pawn data on player state for GAS management (needed for respawn)
+  if (ACombatPlayerState *PS = Cast<ACombatPlayerState>(GetPlayerState())) {
+    PS->SetPawnData(PawnData);
+
+    // Re-initialize ability actor info with the new pawn (important for
+    // respawn)
+    if (UAbilitySystemComponent *ASC = PS->GetAbilitySystemComponent()) {
+      ASC->InitAbilityActorInfo(PS, this);
+    }
+  }
+
+  // Initialize health and stamina components with the ability system
+  UAbilitySystemComponent *ASC = GetAbilitySystemComponent();
+  if (HealthComponent) {
+    HealthComponent->InitializeWithAbilitySystem(ASC);
+  }
+  if (StaminaComponent) {
+    StaminaComponent->InitializeWithAbilitySystem(ASC);
+  }
+
+  // Reset attributes to default values on possession (initial spawn or respawn)
+  if (ACombatPlayerState *PS = Cast<ACombatPlayerState>(GetPlayerState())) {
+    if (ASC) {
+      ASC->SetNumericAttributeBase(UHealthAttributeSet::GetHealthAttribute(),
+                                   PS->GetDefaultMaxHP());
+      ASC->SetNumericAttributeBase(UHealthAttributeSet::GetMaxHealthAttribute(),
+                                   PS->GetDefaultMaxHP());
+      ASC->SetNumericAttributeBase(UStaminaAttributeSet::GetStaminaAttribute(),
+                                   PS->GetDefaultMaxStamina());
+      ASC->SetNumericAttributeBase(
+          UStaminaAttributeSet::GetMaxStaminaAttribute(),
+          PS->GetDefaultMaxStamina());
+    }
+  }
+
+  // Initialize movement attributes and bind delegate
+  InitializeMovementAttributes(ASC);
 }
 
-void ACombatCharacter::ExecuteBufferedAttack() {
-  if (bAttackBuffered && !bIsAttacking) {
-    if (BufferedAttackType == 1) {
-      // Execute buffered combo attack
-      SendGameplayEvent(
-          FGameplayTag::RequestGameplayTag(FName("Event.Attack.Combo.Start")));
-    } else if (BufferedAttackType == 2) {
-      // Execute buffered charged attack
-      SendGameplayEvent(FGameplayTag::RequestGameplayTag(
-          FName("Event.Attack.Charged.Start")));
-    }
-    ClearAttackBuffer();
+void ACombatCharacter::HandleMovementSpeedChanged(
+    const FOnAttributeChangeData &Data) {
+  // Update the character's movement speed based on the GAS attribute
+  if (GetCharacterMovement()) {
+    GetCharacterMovement()->MaxWalkSpeed = Data.NewValue;
   }
 }

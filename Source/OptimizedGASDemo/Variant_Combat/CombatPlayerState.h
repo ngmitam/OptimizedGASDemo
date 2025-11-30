@@ -7,6 +7,9 @@
 #include "AbilitySystemInterface.h"
 #include "Attributes/HealthAttributeSet.h"
 #include "Attributes/DamageAttributeSet.h"
+#include "Gameplay/Attributes/StaminaAttributeSet.h"
+#include "Data/CombatPawnData.h"
+#include "Gameplay/Abilities/CombatAbilitySet.h"
 #include "CombatPlayerState.generated.h"
 
 class UAbilitySystemComponent;
@@ -26,6 +29,18 @@ public:
   virtual UAbilitySystemComponent *GetAbilitySystemComponent() const override;
   // ~end IAbilitySystemInterface
 
+  /** Set pawn data and grant abilities/effects */
+  void SetPawnData(const UCombatPawnData *InPawnData);
+
+  /** Clear all granted abilities/effects from previous pawn data */
+  void ClearPawnData();
+
+  /** Get default max HP */
+  float GetDefaultMaxHP() const { return DefaultMaxHP; }
+
+  /** Get default max stamina */
+  float GetDefaultMaxStamina() const { return DefaultMaxStamina; }
+
 protected:
   /** The ability system component for this player state */
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
@@ -37,6 +52,11 @@ protected:
             meta = (AllowPrivateAccess = "true"))
   UHealthAttributeSet *HealthAttributeSet;
 
+  /** The stamina attribute set for this player state */
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
+            meta = (AllowPrivateAccess = "true"))
+  UStaminaAttributeSet *StaminaAttributeSet;
+
   /** The damage attribute set for this player state */
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
             meta = (AllowPrivateAccess = "true"))
@@ -45,23 +65,25 @@ protected:
   /** Default max HP for the player */
   UPROPERTY(EditAnywhere, Category = "Attributes",
             meta = (ClampMin = 0, ClampMax = 100))
-  float DefaultMaxHP = 100.0f;
+  float DefaultMaxHP = 1000.0f;
 
-  /** Default melee damage */
+  /** Default max Stamina for the player */
   UPROPERTY(EditAnywhere, Category = "Attributes",
             meta = (ClampMin = 0, ClampMax = 100))
-  float DefaultMeleeDamage = 1.0f;
-
-  /** Default melee knockback impulse */
-  UPROPERTY(EditAnywhere, Category = "Attributes",
-            meta = (ClampMin = 0, ClampMax = 1000, Units = "cm/s"))
-  float DefaultMeleeKnockbackImpulse = 250.0f;
-
-  /** Default melee launch impulse */
-  UPROPERTY(EditAnywhere, Category = "Attributes",
-            meta = (ClampMin = 0, ClampMax = 1000, Units = "cm/s"))
-  float DefaultMeleeLaunchImpulse = 300.0f;
+  float DefaultMaxStamina = 100.0f;
 
 protected:
   virtual void BeginPlay() override;
+
+private:
+  /** Handles for currently granted ability sets */
+  TArray<FCombatAbilitySetHandle> GrantedAbilitySetHandles;
+
+  /** Handles for legacy granted abilities (fallback when no AbilitySets
+   * configured) */
+  TArray<FGameplayAbilitySpecHandle> GrantedAbilitySpecHandles;
+
+  /** Handles for legacy granted effects (fallback when no AbilitySets
+   * configured) */
+  TArray<FActiveGameplayEffectHandle> GrantedEffectHandles;
 };

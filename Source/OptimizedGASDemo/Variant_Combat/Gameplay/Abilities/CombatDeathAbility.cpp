@@ -53,6 +53,8 @@ void UCombatDeathAbility::ActivateAbility(
       Character->GetCharacterMovement()->DisableMovement();
       Character->GetCapsuleComponent()->SetCollisionEnabled(
           ECollisionEnabled::NoCollision);
+      // enable full ragdoll physics
+      Character->GetMesh()->SetSimulatePhysics(true);
     }
   }
 

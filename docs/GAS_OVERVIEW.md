@@ -18,14 +18,28 @@ Purpose
 
 -   `ACombatPlayerState` — AbilitySystemComponent owner and attribute init
     -   `Source/OptimizedGASDemo/Variant_Combat/CombatPlayerState.h/.cpp`
--   `UCombatAttributeSet` — Health, MaxHealth, Damage, KnockbackImpulse, LaunchImpulse, TraceDistance, TraceRadius
-    -   `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Attributes/CombatAttributeSet.h/.cpp`
+-   `UHealthAttributeSet` — Health, MaxHealth
+    -   `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Attributes/HealthAttributeSet.h/.cpp`
+-   `UDamageAttributeSet` — Damage, KnockbackImpulse, LaunchImpulse, TraceDistance, TraceRadius
+    -   `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Attributes/DamageAttributeSet.h/.cpp`
+-   `UStaminaAttributeSet` — Stamina, MaxStamina
+    -   `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Attributes/StaminaAttributeSet.h/.cpp`
+-   `UMovementAttributeSet` — Movement-related attributes
+    -   `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Attributes/MovementAttributeSet.h/.cpp`
 -   Abilities (activation, commit, use of attributes and GameplayEffects):
     -   `CombatTraceAttackAbility` — performs sweep traces and uses attributes for damage/knockback
         -   `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Abilities/CombatTraceAttackAbility.*`
     -   `CombatReceiveDamageAbility` — triggered on damage events, applies GameplayEffects and handles death
         -   `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Abilities/CombatReceiveDamageAbility.*`
-    -   Other abilities: `CombatComboAttackAbility`, `CombatChargedAttackAbility`, `CombatLockableAbility`, `CombatLockToggleAbility`
+    -   `CombatComboAttackAbility` — handles combo attacks with montage notifications
+        -   `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Abilities/CombatComboAttackAbility.*`
+    -   `CombatChargedAttackAbility` — press-and-hold charged attacks
+        -   `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Abilities/CombatChargedAttackAbility.*`
+    -   `CombatDeathAbility` — handles death logic and effects
+        -   `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Abilities/CombatDeathAbility.*`
+    -   `CombatStaminaRegenerationAbility` — passive stamina regeneration
+        -   `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Abilities/CombatStaminaRegenerationAbility.*`
+    -   Other abilities: `CombatLockableAbility`, `CombatLockToggleAbility`, `CombatNotifyEnemiesAbility`
 -   Character and integration points:
     -   `ACombatCharacter` — binds input, triggers ability events, and exposes helpers for visual feedback
         -   `Source/OptimizedGASDemo/Variant_Combat/CombatCharacter.*`
@@ -39,11 +53,54 @@ Purpose
 -   Damage is applied using a dedicated `UCombatDamageGameplayEffect` class (see `Gameplay/Effects`) with SetByCaller magnitude tags (e.g. `Data.Damage`) so the ability supplies the amount.
 -   Abilities use GameplayTags extensively for ability grouping, blocking, and triggering (e.g. `Ability.Type.Attack`, `State.Attacking`, `Event.Trace.Attack`).
 
-### Quick tips for editing/extending GAS
+### Lyra-style GrantedHandles Pattern
 
--   Adding a new attribute: add it to `UCombatAttributeSet`, add REP callbacks and `DOREPLIFETIME` entries, then expose a getter and set a sensible default in the AttributeSet constructor.
--   Adding a new ability: create a `UGameplayAbility` subclass in `Gameplay/Abilities/`, set its tags, and use `AbilityTriggers` to activate from gameplay events; use `MakeOutgoingSpec` + `ApplyGameplayEffectSpecToTarget` to apply effects.
--   For authoritative gameplay state (server-controlled): prefer applying GameplayEffects on the server via ASC on the authoritative actor or PlayerState.
+This project now implements Lyra's GrantedHandles pattern for proper ability and effect management:
+
+-   **FCombatAbilitySetHandle**: Tracks granted abilities, effects, and attributes for cleanup
+-   **UCombatAbilitySet**: Manages granting and removing ability sets with proper handle tracking
+-   **Dynamic Pawn Data Changes**: AbilitySystemComponent can now properly clean up when pawn data changes
+
+#### Usage Example
+
+```cpp
+// Grant ability set
+FCombatAbilitySetHandle AbilitySetHandle;
+AbilitySet->GiveToAbilitySystem(ASC, AbilitySetHandle, this);
+
+// Later, remove the granted abilities/effects
+AbilitySet->TakeFromAbilitySystem(ASC, AbilitySetHandle);
+```
+
+#### Migration from Legacy Arrays
+
+The old `GrantedAbilities` and `GrantedEffects` arrays in `UCombatPawnData` are now deprecated. Use `AbilitySets` instead:
+
+1. Create a `UCombatAbilitySet` asset
+2. Add abilities and effects to the asset
+3. Reference the asset in `UCombatPawnData::AbilitySets`
+4. The system will automatically handle granting/removing with proper cleanup
+
+### Lyra Compliance Status
+
+This project follows Lyra standards where applicable for a combat-focused GAS implementation:
+
+#### ✅ Compliant Features
+
+-   **GAS Architecture**: ASC on PlayerState, separate AttributeSets, PawnData-driven granting
+-   **Replication**: Proper COND_OwnerOnly for UI attributes, COND_None for gameplay
+-   **GrantedHandles Pattern**: Implemented for ability/effect management
+-   **AbilitySet Assets**: UCombatAbilitySet for modular ability granting
+-   **Input Integration**: Input Actions mapped to abilities via AbilitySets
+
+#### ❌ Missing Lyra Systems
+
+-   **InputConfig**: Centralized input configuration (consider implementing UCombatInputConfig)
+-   **CameraMode**: Dynamic camera modes (e.g., for aiming, different perspectives)
+-   **HUD Management**: Modular HUD system with layout switching
+-   **Pawn/Controller Extensions**: Extension components for modular functionality
+-   **Experience System**: Leveling and progression mechanics
+-   **Game Features**: Modular feature activation/deactivation
 
 ### Troubleshooting (common issues)
 

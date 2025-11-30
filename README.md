@@ -26,10 +26,38 @@ OptimizedGASDemo is built from the Third Person C++ template, focusing on creati
 
 ## Features
 
--   **Modular GAS Framework**: Extensible abilities and attribute sets (see `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Attributes`)
--   **Gameplay Variants**: Combat, Platforming, and Side-Scrolling setups
+-   **Modular GAS Framework**: Extensible abilities and attribute sets (see `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Attributes` and `Abilities`)
+-   **Gameplay Variants**:
+    -   **Combat**: Action-oriented combat with trace attacks, combos, charged attacks, and damage systems
 -   **Performance Optimized**: Efficient damage tracing and event handling
 -   **Example Implementations**: Ready-to-use abilities and character controllers
+-   **Multiplayer Ready**: Proper replication for attributes and abilities
+
+### Lyra Compliance Status
+
+#### ✅ Implemented (Lyra-compliant)
+
+-   **GAS Architecture**: AbilitySystemComponent on PlayerState, separate AttributeSets, PawnData-driven ability granting with AbilitySets
+-   **Replication**: Proper attribute replication with COND_OwnerOnly for UI attributes (Health, MaxHealth), COND_None for gameplay attributes
+-   **Modular Gameplay**: Variant system for different gameplay modes (Combat, Platforming, SideScrolling)
+-   **Enhanced Input**: Modern input system with Input Actions and Mapping Contexts integrated with AbilitySets
+-   **GrantedHandles Pattern**: Lyra-style ability/effect management with proper cleanup during hot-reloading and pawn data changes
+-   **Modern UE API**: Updated GameplayEffect components to use current UE 5.7 standards (no deprecated warnings)
+-   **AbilitySet Assets**: UCombatAbilitySet data assets implemented to replace legacy pawn data arrays
+-   **PawnData Migration**: Migrated from GrantedAbilities/GrantedEffects arrays to AbilitySets with input mapping
+
+#### ❌ Missing (Not Yet Implemented)
+
+-   **Experience System**: ExperienceDefinition and experience progression system for leveling
+-   **InputConfig**: Centralized input configuration system (UCombatInputConfig) for mapping actions to abilities
+-   **CameraMode**: Dynamic camera mode switching system (e.g., UCombatCameraMode_ThirdPerson, UCombatCameraMode_Aim)
+-   **HUD Management**: Proper HUD layout and management system with widget switching
+-   **Pawn Extension System**: Lyra-style pawn extension components for modular pawn functionality
+-   **Controller Extension System**: Controller extension components for input handling
+-   **Player Spawning System**: Proper player spawning with pawn data application
+-   **Game Feature System**: Modular game features with activation/deactivation
+
+For detailed roadmap and implementation guidance, see [`docs/LYRA_COMPLIANCE.md`](docs/LYRA_COMPLIANCE.md).
 
 ## Quick Start
 
@@ -63,10 +91,15 @@ OptimizedGASDemo is built from the Third Person C++ template, focusing on creati
 ## Project Structure
 
 -   `Source/OptimizedGASDemo/`: Core C++ modules and GAS implementations
-    -   `Variant_Combat/Gameplay/`: Abilities, attributes, and combat logic
-    -   `*Character*`, `*PlayerController*`: Example characters and controllers
+    -   `Variant_Combat/Gameplay/`: Abilities, attributes, and combat logic (Health, Damage, Stamina, Movement AttributeSets; TraceAttack, Combo, Charged, ReceiveDamage, Death, etc. abilities)
+    -   `Variant_Platforming/`: Platforming-specific gameplay mechanics
+    -   `Variant_SideScrolling/`: Side-scrolling gameplay variant
+    -   `*Character*`, `*PlayerController*`, `*PlayerState*`: Example characters, controllers, and player states for each variant
 -   `Content/`: Blueprints, assets, and levels
--   `docs/`: Detailed GAS documentation (`GAS_OVERVIEW.md`)
+    -   `Variant_Combat/`: Combat gameplay assets, animations, UI, VFX
+    -   `Variant_Platforming/`: Platforming assets
+    -   `Variant_SideScrolling/`: Side-scrolling assets
+-   `docs/`: Detailed GAS documentation (`GAS_OVERVIEW.md`, `GAS_SEQUENCE.md`)
 -   `Binaries/`: Compiled executables
 -   `Plugins/`: Enabled plugins (e.g., GameplayAbilities, ModularGameplay)
 
@@ -77,8 +110,9 @@ For a comprehensive guide to GAS in this project, including key classes, usage e
 ### Quick Tips
 
 -   Enable `GameplayAbilities` and `ModularGameplay` plugins in your project settings.
--   Use AttributeSets for health, mana, and custom stats.
--   Implement abilities as subclasses of `UGameplayAbility`.
+-   Use AttributeSets for health, mana, stamina, damage, movement, and custom stats.
+-   Implement abilities as subclasses of `UGameplayAbility`. Check `Variant_Combat/Gameplay/Abilities/` for examples.
+-   For multiplayer, ensure proper replication conditions (OwnerOnly for UI attributes, None for gameplay).
 
 ### Replication and Prediction Best-Practices
 
@@ -88,6 +122,7 @@ This project follows Lyra-inspired standards for multiplayer safety:
 -   **Replication Conditions**: UI attributes (e.g., Health, MaxHealth) use `COND_OwnerOnly` to optimize bandwidth; gameplay attributes use `COND_None`.
 -   **Net Execution Policies**: Passive abilities use `ServerOnly` to prevent client-side inconsistencies; predicted abilities use `LocalPredicted`.
 -   **Error Handling**: Log failures in data loading and ability activation for debugging.
+-   **GrantedHandles Pattern**: Uses Lyra-style ability/effect management for proper cleanup during hot-reloading and pawn data changes.
 
 ## Contributing
 
@@ -105,7 +140,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 Nguyen Minh Tam  
 GitHub: [@ngmitam](https://github.com/ngmitam)  
-Email: ngmitamit@gmai.com
+Email: ngmitamit@gmail.com
 
 ---
 

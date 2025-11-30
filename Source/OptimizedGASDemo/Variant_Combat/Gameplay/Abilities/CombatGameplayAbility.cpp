@@ -2,6 +2,9 @@
 
 #include "CombatGameplayAbility.h"
 #include "CombatBase.h"
+#include "CombatCharacter.h"
+#include "CombatPlayerState.h"
+#include "AbilitySystemGlobals.h"
 
 UCombatGameplayAbility::UCombatGameplayAbility() {}
 
@@ -38,4 +41,14 @@ void UCombatGameplayAbility::EndAbility(
 
 ACombatBase *UCombatGameplayAbility::GetCombatBaseFromActorInfo() const {
   return Cast<ACombatBase>(GetAvatarActorFromActorInfo());
+}
+
+UAbilitySystemComponent *UCombatGameplayAbility::GetAbilitySystemComponent(
+    const FGameplayAbilityActorInfo *ActorInfo) const {
+  if (ACombatBase *CombatBase = GetCombatBaseFromActorInfo()) {
+    return CombatBase->GetAbilitySystemComponent();
+  }
+
+  return UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(
+      ActorInfo->OwnerActor.Get());
 }

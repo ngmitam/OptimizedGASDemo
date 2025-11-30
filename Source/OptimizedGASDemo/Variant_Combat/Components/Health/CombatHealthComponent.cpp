@@ -49,6 +49,16 @@ void UCombatHealthComponent::EndPlay(const EEndPlayReason::Type EndPlayReason) {
 
 void UCombatHealthComponent::InitializeWithAbilitySystem(
     UAbilitySystemComponent *InASC) {
+  // Clean up old bindings if they exist
+  if (AbilitySystemComponent) {
+    AbilitySystemComponent
+        ->GetGameplayAttributeValueChangeDelegate(HealthAttribute)
+        .Remove(HealthChangedDelegateHandle);
+    AbilitySystemComponent
+        ->GetGameplayAttributeValueChangeDelegate(MaxHealthAttribute)
+        .Remove(MaxHealthChangedDelegateHandle);
+  }
+
   AbilitySystemComponent = InASC;
 
   if (AbilitySystemComponent) {
@@ -136,4 +146,14 @@ void UCombatHealthComponent::HandleDeath() {
 void UCombatHealthComponent::HandleRevive() {
   // Handle revive logic here
   // For example, enable input, reset animations, etc.
+
+  // Disable ragdoll physics
+  AActor *Owner = GetOwner();
+  if (Owner) {
+    ACharacter *Character = Cast<ACharacter>(Owner);
+    if (Character && Character->GetMesh()) {
+      Character->GetMesh()->SetPhysicsBlendWeight(0.0f);
+      Character->GetMesh()->SetSimulatePhysics(false);
+    }
+  }
 }

@@ -7,12 +7,12 @@
 #include "GameplayTagsManager.h"
 #include "GameplayEffect.h"
 #include "InputAction.h"
+#include "Gameplay/Abilities/CombatAbilitySet.h"
 #include "CombatPawnData.generated.h"
 
 class UAttributeSet;
 class UGameplayAbility;
 class UGameplayEffect;
-class UCombatAbilitySet;
 
 /** Ability set with input mapping */
 USTRUCT(BlueprintType)
@@ -52,11 +52,11 @@ public:
 
   /** Default health value */
   UPROPERTY(EditDefaultsOnly, Category = "Attributes", meta = (ClampMin = 0))
-  float DefaultHealth = 100.0f;
+  float DefaultHealth = 1000.0f;
 
   /** Default max health value */
   UPROPERTY(EditDefaultsOnly, Category = "Attributes", meta = (ClampMin = 0))
-  float DefaultMaxHealth = 100.0f;
+  float DefaultMaxHealth = 1000.0f;
 
   /** Default damage value */
   UPROPERTY(EditDefaultsOnly, Category = "Attributes", meta = (ClampMin = 0))
@@ -70,12 +70,24 @@ public:
   UPROPERTY(EditDefaultsOnly, Category = "Attributes", meta = (ClampMin = 0))
   float DefaultLaunchImpulse = 300.0f;
 
+  /** Default stamina value */
+  UPROPERTY(EditDefaultsOnly, Category = "Attributes", meta = (ClampMin = 0))
+  float DefaultStamina = 100.0f;
+
+  /** Default max stamina value */
+  UPROPERTY(EditDefaultsOnly, Category = "Attributes", meta = (ClampMin = 0))
+  float DefaultMaxStamina = 100.0f;
+
   /** Granted abilities (legacy - use AbilitySets instead) */
-  UPROPERTY(EditDefaultsOnly, Category = "Abilities (Legacy)")
+  UPROPERTY(EditDefaultsOnly, Category = "Abilities (Legacy)",
+            meta = (DeprecatedProperty,
+                    DeprecationMessage = "Use AbilitySets instead"))
   TArray<TSubclassOf<UGameplayAbility>> GrantedAbilities;
 
   /** Granted effects (legacy - use AbilitySets instead) */
-  UPROPERTY(EditDefaultsOnly, Category = "Effects (Legacy)")
+  UPROPERTY(EditDefaultsOnly, Category = "Effects (Legacy)",
+            meta = (DeprecatedProperty,
+                    DeprecationMessage = "Use AbilitySets instead"))
   TArray<TSubclassOf<UGameplayEffect>> GrantedEffects;
 
   /** Granted ability sets with input mapping */
@@ -84,4 +96,10 @@ public:
 
   /** Load attributes from data table */
   void LoadFromDataTable();
+
+  /** Get all granted abilities from both AbilitySets and legacy arrays */
+  TArray<TSubclassOf<UGameplayAbility>> GetAllGrantedAbilities() const;
+
+  /** Get all granted effects from both AbilitySets and legacy arrays */
+  TArray<TSubclassOf<UGameplayEffect>> GetAllGrantedEffects() const;
 };

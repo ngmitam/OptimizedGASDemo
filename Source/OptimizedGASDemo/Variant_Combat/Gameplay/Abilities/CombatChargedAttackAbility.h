@@ -37,6 +37,18 @@ public:
   /** Called when montage ends */
   void OnMontageEnded(UAnimMontage *Montage, bool bInterrupted);
 
+  /** Stamina costs for charged attack (per loop) */
+  UPROPERTY(EditAnywhere, Category = "Charged Attack")
+  TArray<float> StaminaCosts = {10.0f};
+
+  /** Effect class to use for stamina cost */
+  UPROPERTY(EditAnywhere, Category = "Charged Attack")
+  TSubclassOf<UGameplayEffect> StaminaCostEffectClass;
+
+  /** Effect class to use for setting stamina used */
+  UPROPERTY(EditAnywhere, Category = "Charged Attack")
+  TSubclassOf<UGameplayEffect> StaminaUsedEffectClass;
+
 protected:
   /** Montage to play for charged attack */
   UPROPERTY(EditDefaultsOnly, Category = "Charged Attack")
@@ -62,4 +74,10 @@ private:
 
   /** Target charge loops (for AI) */
   int32 TargetChargeLoops = 0;
+
+  /** Whether the ability has been auto-released due to insufficient stamina */
+  bool bAutoReleased = false;
+
+  /** Total stamina used in this charged attack (for damage scaling) */
+  float TotalStaminaUsed = 0.0f;
 };

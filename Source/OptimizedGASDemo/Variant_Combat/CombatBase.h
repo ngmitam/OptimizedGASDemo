@@ -5,13 +5,11 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "AbilitySystemInterface.h"
-#include "AbilitySystemComponent.h"
 #include "CombatAttacker.h"
-#include "CombatDamageable.h"
+#include "Interfaces/CombatDamageable.h"
 #include "Animation/AnimInstance.h"
 #include "Health/CombatHealthComponent.h"
-#include "Attributes/HealthAttributeSet.h"
-#include "Attributes/DamageAttributeSet.h"
+#include "Stamina/CombatStaminaComponent.h"
 #include "Data/CombatPawnData.h"
 #include "Data/CombatDamageEventData.h"
 #include "CombatBase.generated.h"
@@ -41,20 +39,10 @@ protected:
             meta = (AllowPrivateAccess = "true"))
   UCombatHealthComponent *HealthComponent;
 
-  /** The ability system component for this character */
-  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
+  /** Stamina component for managing stamina */
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components",
             meta = (AllowPrivateAccess = "true"))
-  UAbilitySystemComponent *AbilitySystemComponent;
-
-  /** The health attribute set for this character */
-  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
-            meta = (AllowPrivateAccess = "true"))
-  UHealthAttributeSet *HealthAttributeSet;
-
-  /** The damage attribute set for this character */
-  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
-            meta = (AllowPrivateAccess = "true"))
-  UDamageAttributeSet *DamageAttributeSet;
+  UCombatStaminaComponent *StaminaComponent;
 
   /** Pawn data for attributes and abilities */
   UPROPERTY(EditDefaultsOnly, Category = "GAS")
@@ -69,12 +57,17 @@ protected:
 
   /** Max amount of HP the character will have */
   UPROPERTY(EditAnywhere, Category = "Damage")
-  float MaxHP = 100.0f;
+  float MaxHP = 1000.0f;
 
   /** Current amount of HP the character has */
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Damage",
             meta = (ClampMin = 0))
-  float CurrentHP = 100.0f;
+  float CurrentHP = 1000.0f;
+
+  /** Current amount of Stamina the character has */
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stamina",
+            meta = (ClampMin = 0))
+  float CurrentStamina = 100.0f;
 
   /** Amount of damage a melee attack will deal */
   UPROPERTY(EditAnywhere, Category = "Melee Attack|Damage",
@@ -90,22 +83,6 @@ protected:
   UPROPERTY(EditAnywhere, Category = "Melee Attack|Damage",
             meta = (ClampMin = 0, ClampMax = 1000, Units = "cm/s"))
   float MeleeLaunchImpulse = 300.0f;
-
-  /** Index of the current stage of the melee attack combo */
-  int32 ComboCount = 0;
-
-  /** Target number of attacks in the combo attack string we're playing */
-  int32 TargetComboCount = 0;
-
-  /** Index of the current stage of the melee attack combo */
-  int32 CurrentComboAttack = 0;
-
-  /** Flag that determines if the character is currently holding the charged
-   * attack input */
-  bool bIsChargingAttack = false;
-
-  /** If true, the charged attack hold check has been tested at least once */
-  bool bHasLoopedChargedAttack = false;
 
   /** Time to wait before removing this character from the level after it dies
    */
@@ -131,9 +108,6 @@ protected:
   UPROPERTY(EditAnywhere, Category = "Melee Attack|Trace",
             meta = (ClampMin = 0, ClampMax = 200, Units = "cm"))
   float DangerTraceRadius = 100.0f;
-
-  /** If true, the character is currently playing an attack animation */
-  bool bIsAttacking = false;
 
   /** Distance ahead of the character that melee attack sphere collision traces
    * will extend */
@@ -202,25 +176,13 @@ public:
   FName GetPelvisBoneName() const { return PelvisBoneName; }
 
   /** Get combo input cache time tolerance */
-  virtual float GetComboInputCacheTimeTolerance() const { return 0.45f; }
+  virtual float GetComboInputCacheTimeTolerance() const { return 1.0f; }
 
   /** Get danger trace distance */
   float GetDangerTraceDistance() const { return DangerTraceDistance; }
 
   /** Get danger trace radius */
   float GetDangerTraceRadius() const { return DangerTraceRadius; }
-
-  /** Get cached combo attack input time */
-  virtual float GetCachedComboAttackInputTime() const { return 0.0f; }
-
-  /** Set cached combo attack input time */
-  virtual void SetCachedComboAttackInputTime(float Time) {}
-
-  /** Get cached charged attack input time */
-  virtual float GetCachedChargedAttackInputTime() const { return 0.0f; }
-
-  /** Set cached charged attack input time */
-  virtual void SetCachedChargedAttackInputTime(float Time) {}
 
   /** Returns the last recorded location we were attacked from */
   const FVector &GetLastDangerLocation() const { return LastDangerLocation; }
@@ -233,9 +195,6 @@ public:
 
   /** Get health component */
   UCombatHealthComponent *GetHealthComponent() const { return HealthComponent; }
-
-  /** Set attacking flag */
-  void SetIsAttacking(bool bAttacking) { bIsAttacking = bAttacking; }
 
 protected:
   // ~begin CombatAttacker interface
@@ -277,12 +236,6 @@ protected:
   /** Cleanup */
   virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
-  /** Initialize ability system components */
-  void InitializeAbilitySystemComponents();
-
-  /** Initialize pawn data and grant abilities/effects */
-  void InitializePawnData();
-
   /** Helper method to send gameplay events */
   void SendGameplayEvent(FGameplayTag EventTag, float EventMagnitude = 0.0f,
                          UObject *OptionalObject = nullptr,
@@ -304,9 +257,23 @@ public:
 
   /** Called when HealthComponent max health changes */
   void OnMaxHealthComponentChanged(float NewMaxHealth);
+  /** Called when StaminaComponent stamina changes */
+  void OnStaminaComponentChanged(float NewStamina);
+
+  /** Called when StaminaComponent max stamina changes */
+  void OnMaxStaminaComponentChanged(float NewMaxStamina);
+
+  /** Handle movement speed attribute changes */
+  void HandleMovementSpeedChanged(const FOnAttributeChangeData &Data);
+
+  /** Initialize movement speed attributes and bind delegate */
+  void InitializeMovementAttributes(UAbilitySystemComponent *ASC);
 
   /** Resets the character's current HP to maximum */
   void ResetHP();
+
+  /** Resets the character's current Stamina to maximum */
+  void ResetStamina();
 
   /** Removes this character from the level after it dies */
   void RemoveFromLevel();

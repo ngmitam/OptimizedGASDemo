@@ -11,6 +11,9 @@
 #include "Blueprint/UserWidget.h"
 #include "OptimizedGASDemo.h"
 #include "Widgets/Input/SVirtualJoystick.h"
+#include "Attributes/HealthAttributeSet.h"
+#include "Attributes/StaminaAttributeSet.h"
+#include "CombatPlayerState.h"
 
 void ACombatPlayerController::BeginPlay() {
   Super::BeginPlay();
@@ -73,6 +76,21 @@ void ACombatPlayerController::SetRespawnTransform(
 }
 
 void ACombatPlayerController::OnPawnDestroyed(AActor *DestroyedActor) {
+  // Reset to default values before spawning
+  if (ACombatPlayerState *PS = Cast<ACombatPlayerState>(PlayerState)) {
+    if (UAbilitySystemComponent *ASC = PS->GetAbilitySystemComponent()) {
+      ASC->SetNumericAttributeBase(UHealthAttributeSet::GetHealthAttribute(),
+                                   PS->GetDefaultMaxHP());
+      ASC->SetNumericAttributeBase(UHealthAttributeSet::GetMaxHealthAttribute(),
+                                   PS->GetDefaultMaxHP());
+      ASC->SetNumericAttributeBase(UStaminaAttributeSet::GetStaminaAttribute(),
+                                   PS->GetDefaultMaxStamina());
+      ASC->SetNumericAttributeBase(
+          UStaminaAttributeSet::GetMaxStaminaAttribute(),
+          PS->GetDefaultMaxStamina());
+    }
+  }
+
   // spawn a new character at the respawn transform
   if (ACombatCharacter *RespawnedCharacter =
           GetWorld()->SpawnActor<ACombatCharacter>(

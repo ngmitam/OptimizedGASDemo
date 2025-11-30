@@ -24,9 +24,9 @@ void UCombatLockableAbility::OnGiveAbility(
 
   // Try to activate the ability immediately upon granting (server-only for
   // multiplayer safety)
-  if (ActorInfo && ActorInfo->AbilitySystemComponent.IsValid() &&
+  if (ActorInfo && GetAbilitySystemComponent(ActorInfo) &&
       ActorInfo->AvatarActor.Get() &&
       ActorInfo->AvatarActor.Get()->HasAuthority()) {
-    ActorInfo->AbilitySystemComponent.Get()->TryActivateAbility(Spec.Handle);
+    GetAbilitySystemComponent(ActorInfo)->TryActivateAbility(Spec.Handle);
   }
 }

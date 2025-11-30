@@ -19,7 +19,9 @@ struct FCombatAbilitySetHandle {
   void AddAbilitySpecHandle(const FGameplayAbilitySpecHandle &Handle);
   void AddGameplayEffectHandle(const FActiveGameplayEffectHandle &Handle);
   void AddAttributeSet(UAttributeSet *AttributeSet);
-  void TakeFromAbilitySystem(UAbilitySystemComponent *AbilitySystemComponent);
+  void TakeFromAbilitySystem(UAbilitySystemComponent *ASC);
+  bool IsValid() const;
+  void Reset();
 
 private:
   TArray<FGameplayAbilitySpecHandle> AbilitySpecHandles;
@@ -67,9 +69,14 @@ class UCombatAbilitySet : public UGameplayAbilitySet {
 public:
   UCombatAbilitySet();
 
-  void GiveToAbilitySystem(UAbilitySystemComponent *AbilitySystemComponent,
-                           FCombatAbilitySetHandle &AbilitySetHandle,
-                           UObject *SourceObject) const;
+  /** Grants the ability set to the specified ability system component */
+  void GiveToAbilitySystem(UAbilitySystemComponent *ASC,
+                           FCombatAbilitySetHandle &OutAbilitySetHandle,
+                           UObject *SourceObject = nullptr) const;
+
+  /** Takes the ability set from the specified ability system component */
+  void TakeFromAbilitySystem(UAbilitySystemComponent *ASC,
+                             FCombatAbilitySetHandle &AbilitySetHandle);
 
   /** Granted gameplay effects */
   UPROPERTY(EditAnywhere, Category = AbilitySet)

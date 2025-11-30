@@ -39,12 +39,48 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnEnemyDied);
  *  An AI-controlled character with combat capabilities.
  *  Its bundled AI Controller runs logic through StateTree
  */
+class UHealthAttributeSet;
+class UDamageAttributeSet;
+class UStaminaAttributeSet;
+class UMovementAttributeSet;
+
 UCLASS()
 class ACombatEnemy : public ACombatBase {
   GENERATED_BODY()
 
+protected:
+  /** The ability system component for this enemy */
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
+            meta = (AllowPrivateAccess = "true"))
+  UAbilitySystemComponent *AbilitySystemComponent;
+
+  /** The health attribute set for this enemy */
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
+            meta = (AllowPrivateAccess = "true"))
+  UHealthAttributeSet *HealthAttributeSet;
+
+  /** The damage attribute set for this enemy */
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
+            meta = (AllowPrivateAccess = "true"))
+  UDamageAttributeSet *DamageAttributeSet;
+
+  /** The stamina attribute set for this enemy */
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
+            meta = (AllowPrivateAccess = "true"))
+  UStaminaAttributeSet *StaminaAttributeSet;
+
+  /** The movement attribute set for this enemy */
+  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
+            meta = (AllowPrivateAccess = "true"))
+  UMovementAttributeSet *MovementAttributeSet;
+
 public:
   ACombatEnemy();
+
+  // ~begin IAbilitySystemInterface
+  virtual UAbilitySystemComponent *GetAbilitySystemComponent() const override;
+  // ~end IAbilitySystemInterface
+
   /** Attack completed internal delegate to notify StateTree tasks */
   FOnEnemyAttackCompleted OnAttackCompleted;
 
@@ -83,9 +119,6 @@ public:
 
   /** Get maximum charge loops */
   int32 GetMaxChargeLoops() const { return MaxChargeLoops; }
-
-  /** If true, the charged attack hold check has been tested at least once */
-  bool bHasLoopedChargedAttack = false;
 
   /** Minimum number of charge animation loops that will be played by the AI */
   UPROPERTY(EditAnywhere, Category = "Melee Attack|Charged",
@@ -136,6 +169,15 @@ protected:
   /** EndPlay cleanup */
   virtual void EndPlay(EEndPlayReason::Type EndPlayReason) override;
 
+  /** Initialize the ability system components */
+  void InitializeAbilitySystemComponents();
+
+  /** Initialize pawn data and grant abilities/effects */
+  void InitializePawnData();
+
   /** Handles death events */
   virtual void HandleDeath() override;
+
+  /** Handle movement speed attribute changes */
+  void HandleMovementSpeedChanged(const FOnAttributeChangeData &Data);
 };

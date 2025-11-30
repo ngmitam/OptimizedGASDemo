@@ -19,27 +19,37 @@ void FCombatAbilitySetHandle::AddAttributeSet(UAttributeSet *AttributeSet) {
 }
 
 void FCombatAbilitySetHandle::TakeFromAbilitySystem(
-    UAbilitySystemComponent *AbilitySystemComponent) {
-  if (!AbilitySystemComponent) {
+    UAbilitySystemComponent *ASC) {
+  if (!ASC) {
     return;
   }
 
   // Remove abilities
   for (const FGameplayAbilitySpecHandle &Handle : AbilitySpecHandles) {
-    AbilitySystemComponent->ClearAbility(Handle);
+    if (Handle.IsValid()) {
+      ASC->ClearAbility(Handle);
+    }
   }
 
   // Remove effects
   for (const FActiveGameplayEffectHandle &Handle : GameplayEffectHandles) {
-    AbilitySystemComponent->RemoveActiveGameplayEffect(Handle);
+    if (Handle.IsValid()) {
+      ASC->RemoveActiveGameplayEffect(Handle);
+    }
   }
 
-  // Remove attribute sets
-  for (UAttributeSet *AttributeSet : GrantedAttributeSets) {
-    // Note: Attribute sets are typically permanent and not removed
-    // AbilitySystemComponent->RemoveAttributeSetSubobject(AttributeSet);
-  }
+  // Note: Attribute sets are typically permanent and not removed during runtime
+  // They are managed by the AbilitySystemComponent's lifetime
 
+  Reset();
+}
+
+bool FCombatAbilitySetHandle::IsValid() const {
+  return AbilitySpecHandles.Num() > 0 || GameplayEffectHandles.Num() > 0 ||
+         GrantedAttributeSets.Num() > 0;
+}
+
+void FCombatAbilitySetHandle::Reset() {
   AbilitySpecHandles.Reset();
   GameplayEffectHandles.Reset();
   GrantedAttributeSets.Reset();
@@ -48,19 +58,25 @@ void FCombatAbilitySetHandle::TakeFromAbilitySystem(
 UCombatAbilitySet::UCombatAbilitySet() {}
 
 void UCombatAbilitySet::GiveToAbilitySystem(
-    UAbilitySystemComponent *AbilitySystemComponent,
-    FCombatAbilitySetHandle &AbilitySetHandle, UObject *SourceObject) const {
-  if (!AbilitySystemComponent) {
+    UAbilitySystemComponent *ASC, FCombatAbilitySetHandle &OutAbilitySetHandle,
+    UObject *SourceObject) const {
+  if (!ASC) {
     return;
   }
 
-  // Grant abilities
+  // Grant abilities from the base GameplayAbilitySet
   for (const FGameplayAbilityBindInfo &BindInfo : Abilities) {
     if (BindInfo.GameplayAbilityClass) {
-      FGameplayAbilitySpecHandle AbilitySpecHandle =
-          AbilitySystemComponent->GiveAbility(FGameplayAbilitySpec(
-              BindInfo.GameplayAbilityClass, 1, (int32)BindInfo.Command));
-      AbilitySetHandle.AddAbilitySpecHandle(AbilitySpecHandle);
+      // Check if ability is already granted
+      if (!ASC->FindAbilitySpecFromClass(BindInfo.GameplayAbilityClass)) {
+        FGameplayAbilitySpec AbilitySpec(BindInfo.GameplayAbilityClass, 1,
+                                         (int32)BindInfo.Command);
+        FGameplayAbilitySpecHandle AbilitySpecHandle =
+            ASC->GiveAbility(AbilitySpec);
+        if (AbilitySpecHandle.IsValid()) {
+          OutAbilitySetHandle.AddAbilitySpecHandle(AbilitySpecHandle);
+        }
+      }
     }
   }
 
@@ -68,10 +84,15 @@ void UCombatAbilitySet::GiveToAbilitySystem(
   for (const FGameplayAttributeApplicationInfo &AttributeInfo :
        GrantedAttributes) {
     if (AttributeInfo.AttributeSet) {
-      UAttributeSet *NewAttributeSet = NewObject<UAttributeSet>(
-          AbilitySystemComponent->GetOwner(), AttributeInfo.AttributeSet);
-      AbilitySystemComponent->AddAttributeSetSubobject(NewAttributeSet);
-      AbilitySetHandle.AddAttributeSet(NewAttributeSet);
+      // Check if attribute set is already added
+      if (!ASC->GetAttributeSet(AttributeInfo.AttributeSet)) {
+        UAttributeSet *NewAttributeSet = NewObject<UAttributeSet>(
+            ASC->GetOwner(), AttributeInfo.AttributeSet);
+        if (NewAttributeSet) {
+          ASC->AddAttributeSetSubobject(NewAttributeSet);
+          OutAbilitySetHandle.AddAttributeSet(NewAttributeSet);
+        }
+      }
     }
   }
 
@@ -79,15 +100,29 @@ void UCombatAbilitySet::GiveToAbilitySystem(
   for (const FGameplayEffectApplicationInfo &EffectInfo :
        GrantedGameplayEffects) {
     if (EffectInfo.GameplayEffect) {
-      FGameplayEffectSpecHandle SpecHandle =
-          AbilitySystemComponent->MakeOutgoingSpec(
-              EffectInfo.GameplayEffect, 1.0f, FGameplayEffectContextHandle());
-      if (SpecHandle.IsValid()) {
-        FActiveGameplayEffectHandle EffectHandle =
-            AbilitySystemComponent->ApplyGameplayEffectSpecToTarget(
-                *SpecHandle.Data.Get(), AbilitySystemComponent);
-        AbilitySetHandle.AddGameplayEffectHandle(EffectHandle);
+      // Check if effect is already active
+      FGameplayEffectQuery Query;
+      Query.EffectDefinition = EffectInfo.GameplayEffect;
+      TArray<FActiveGameplayEffectHandle> ActiveEffects =
+          ASC->GetActiveEffects(Query);
+      if (ActiveEffects.Num() == 0) {
+        FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(
+            EffectInfo.GameplayEffect, 1.0f, ASC->MakeEffectContext());
+        if (SpecHandle.IsValid()) {
+          FActiveGameplayEffectHandle EffectHandle =
+              ASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), ASC);
+          if (EffectHandle.IsValid()) {
+            OutAbilitySetHandle.AddGameplayEffectHandle(EffectHandle);
+          }
+        }
       }
     }
+  }
+}
+
+void UCombatAbilitySet::TakeFromAbilitySystem(
+    UAbilitySystemComponent *ASC, FCombatAbilitySetHandle &AbilitySetHandle) {
+  if (ASC && AbilitySetHandle.IsValid()) {
+    AbilitySetHandle.TakeFromAbilitySystem(ASC);
   }
 }

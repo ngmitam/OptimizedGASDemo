@@ -3,14 +3,14 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameplayEffect.h"
+#include "CombatGameplayEffect.h"
 #include "CombatDamageGameplayEffect.generated.h"
 
 /**
  * GameplayEffect for applying damage to health attribute
  */
 UCLASS()
-class UCombatDamageGameplayEffect : public UGameplayEffect {
+class UCombatDamageGameplayEffect : public UCombatGameplayEffect {
   GENERATED_BODY()
 
 public:
