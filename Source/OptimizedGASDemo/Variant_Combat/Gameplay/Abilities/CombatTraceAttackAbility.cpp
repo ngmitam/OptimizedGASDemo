@@ -69,10 +69,10 @@ void UCombatTraceAttackAbility::PerformAttackTrace() {
 
   // Get damage from GAS attribute
   UAbilitySystemComponent *ASC = GetAbilitySystemComponent(CurrentActorInfo);
-  float Damage = DamageAmount;
+  float BaseDamage = DamageAmount;
   if (ASC) {
-    Damage = DamageAmount + ASC->GetNumericAttribute(
-                                UDamageAttributeSet::GetDamageAttribute());
+    BaseDamage = DamageAmount + ASC->GetNumericAttribute(
+                                    UDamageAttributeSet::GetDamageAttribute());
   }
 
   // Get knockback and launch from GAS attributes
@@ -113,9 +113,8 @@ void UCombatTraceAttackAbility::PerformAttackTrace() {
   }
 
   // Scale damage based on stamina used (higher stamina cost = higher damage)
-  // Damage multiplier: base damage + (stamina used * 1.5)
-  float StaminaDamageMultiplier = 1.0f + (StaminaUsed * 1.5f);
-  Damage *= StaminaDamageMultiplier;
+  // Damage : base damage + (stamina used * StaminaDamageMultiplier)
+  float Damage = BaseDamage + (StaminaUsed * StaminaDamageMultiplier);
 
   if (ACharacter *Character = Cast<ACharacter>(AvatarActor)) {
     if (Character->GetMesh()) {

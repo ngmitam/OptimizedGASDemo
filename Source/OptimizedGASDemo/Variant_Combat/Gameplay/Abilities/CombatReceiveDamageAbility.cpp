@@ -8,6 +8,7 @@
 #include "Interfaces/CombatDamageable.h"
 #include "AbilitySystemComponent.h"
 #include "Attributes/HealthAttributeSet.h"
+#include "Attributes/DamageAttributeSet.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Camera/CameraShakeBase.h"
@@ -87,11 +88,13 @@ void UCombatReceiveDamageAbility::ActivateAbility(
   UAbilitySystemComponent *ASC = GetAbilitySystemComponent(ActorInfo);
 
   if (ASC && DamageGameplayEffect) {
+    // Set damage attribute on source for execution calculation
+    ASC->SetNumericAttributeBase(UDamageAttributeSet::GetDamageAttribute(),
+                                 Damage);
+
     FGameplayEffectSpecHandle DamageSpecHandle = ASC->MakeOutgoingSpec(
         DamageGameplayEffect, 1.0f, ASC->MakeEffectContext());
     if (DamageSpecHandle.IsValid()) {
-      DamageSpecHandle.Data.Get()->SetSetByCallerMagnitude(
-          FGameplayTag::RequestGameplayTag(FName("Data.Damage")), -Damage);
       ASC->ApplyGameplayEffectSpecToTarget(*DamageSpecHandle.Data.Get(), ASC);
     }
   }

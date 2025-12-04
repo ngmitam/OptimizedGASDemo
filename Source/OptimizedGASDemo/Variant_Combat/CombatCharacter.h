@@ -119,15 +119,6 @@ protected:
             meta = (ClampMin = 0, ClampMax = 5, Units = "s"))
   float AttackInputCacheTimeTolerance = 2.0f;
 
-  /** Max amount of time that may elapse for a combo attack input to not be
-   * considered stale */
-  UPROPERTY(EditAnywhere, Category = "Melee Attack|Combo",
-            meta = (ClampMin = 0, ClampMax = 5, Units = "s"))
-  float ComboInputCacheTimeTolerance = 0.45f;
-
-  /** Time at which a combo attack button was last pressed */
-  float CachedComboAttackInputTime = 0.0f;
-
   /** Camera shake for attacks */
   UPROPERTY(EditAnywhere, Category = "Feedback")
   TSubclassOf<UCameraShakeBase> AttackCameraShake;
@@ -180,11 +171,6 @@ public:
 
   virtual void PossessedBy(AController *NewController) override;
 
-  /** Get combo input cache time tolerance */
-  float GetComboInputCacheTimeTolerance() const override {
-    return ComboInputCacheTimeTolerance;
-  }
-
   /** Get danger trace distance */
   float GetDangerTraceDistance() const { return DangerTraceDistance; }
 
@@ -200,31 +186,23 @@ public:
   /** Get charge attack section name */
   FName GetChargeAttackSection() const { return ChargeAttackSection; }
 
-  /** Get cached combo attack input time */
-  float GetCachedComboAttackInputTime() const {
-    return CachedComboAttackInputTime;
-  }
-
-  /** Set cached combo attack input time */
-  void SetCachedComboAttackInputTime(float Time) {
-    CachedComboAttackInputTime = Time;
-  }
-
 protected:
   /** Called for movement input */
   void Move(const FInputActionValue &Value);
 
-  /** Called for looking input */
+  /** Called for look input */
   void Look(const FInputActionValue &Value);
 
-  /** Called for combo attack input */
-  void ComboAttackPressed();
+  /** Bind inputs from the pawn's InputConfig data asset (data-driven bindings)
+   */
+  void BindInputsFromConfig(UEnhancedInputComponent *EnhancedInputComponent);
 
-  /** Called for combo attack input pressed */
-  void ChargedAttackPressed();
+  /** Bind a minimal set of movement/look inputs (fallback) */
+  void BindBasicMovementInputs(UEnhancedInputComponent *EnhancedInputComponent);
 
-  /** Called for combo attack input released */
-  void ChargedAttackReleased();
+  /** Send a gameplay event trigger tag to the ASC (bound from input mappings)
+   */
+  void SendAbilityTrigger(FGameplayTag TriggerTag);
 
   /** Called for toggle camera side input */
   void ToggleCamera();
@@ -251,22 +229,6 @@ public:
   /** Handles look inputs from either controls or UI interfaces */
   UFUNCTION(BlueprintCallable, Category = "Input")
   virtual void DoLook(float Yaw, float Pitch);
-
-  /** Handles combo attack pressed from either controls or UI interfaces */
-  UFUNCTION(BlueprintCallable, Category = "Input")
-  virtual void DoComboAttackStart();
-
-  /** Handles combo attack released from either controls or UI interfaces */
-  UFUNCTION(BlueprintCallable, Category = "Input")
-  virtual void DoComboAttackEnd();
-
-  /** Handles charged attack pressed from either controls or UI interfaces */
-  UFUNCTION(BlueprintCallable, Category = "Input")
-  virtual void DoChargedAttackStart();
-
-  /** Handles charged attack released from either controls or UI interfaces */
-  UFUNCTION(BlueprintCallable, Category = "Input")
-  virtual void DoChargedAttackEnd();
 
 protected:
   // ~begin CombatAttacker interface
@@ -311,6 +273,11 @@ public:
   /** Returns LockSystemComponent subobject **/
   FORCEINLINE class UCombatLockSystemComponent *GetLockSystemComponent() const {
     return LockSystemComponent;
+  }
+
+  /** Get attack camera shake class (public accessor for abilities) */
+  TSubclassOf<UCameraShakeBase> GetAttackCameraShake() const {
+    return AttackCameraShake;
   }
 
   /** Tick function */

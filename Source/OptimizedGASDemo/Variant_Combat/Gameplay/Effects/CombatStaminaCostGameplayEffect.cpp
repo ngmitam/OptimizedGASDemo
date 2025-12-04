@@ -4,21 +4,17 @@
 #include "Attributes/StaminaAttributeSet.h"
 #include "GameplayTagsManager.h"
 #include "GameplayEffect.h"
+#include "Executions/CombatExecutionCalculation.h"
 
 UCombatStaminaCostGameplayEffect::UCombatStaminaCostGameplayEffect() {
   // Set duration policy to instant
   DurationPolicy = EGameplayEffectDurationType::Instant;
 
-  // Modifiers: Reduce stamina by caller-specified amount
-  FGameplayModifierInfo StaminaModifier;
-  StaminaModifier.Attribute = UStaminaAttributeSet::GetStaminaAttribute();
-  StaminaModifier.ModifierOp = EGameplayModOp::Additive;
-  FSetByCallerFloat SetByCallerFloat;
-  SetByCallerFloat.DataTag =
-      FGameplayTag::RequestGameplayTag(FName("Data.StaminaCost"));
-  FGameplayEffectModifierMagnitude SetByCallerMagnitude(SetByCallerFloat);
-  StaminaModifier.ModifierMagnitude = SetByCallerMagnitude;
-  Modifiers.Add(StaminaModifier);
+  // Use execution calculation for stamina cost
+  FGameplayEffectExecutionDefinition ExecutionDef;
+  ExecutionDef.CalculationClass =
+      UCombatStaminaExecutionCalculation::StaticClass();
+  Executions.Add(ExecutionDef);
 }
 
 void UCombatStaminaCostGameplayEffect::PostInitProperties() {

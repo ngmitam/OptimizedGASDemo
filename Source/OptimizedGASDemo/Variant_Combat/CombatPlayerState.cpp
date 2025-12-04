@@ -3,19 +3,14 @@
 #include "CombatPlayerState.h"
 #include "AbilitySystemComponent.h"
 #include "Attributes/HealthAttributeSet.h"
+#include "Attributes/StaminaAttributeSet.h"
 #include "Attributes/DamageAttributeSet.h"
+#include "Attributes/MovementAttributeSet.h"
 
 ACombatPlayerState::ACombatPlayerState() {
   AbilitySystemComponent = CreateDefaultSubobject<UAbilitySystemComponent>(
       TEXT("AbilitySystemComponent"));
   AbilitySystemComponent->SetIsReplicated(true);
-
-  HealthAttributeSet =
-      CreateDefaultSubobject<UHealthAttributeSet>(TEXT("HealthAttributeSet"));
-  DamageAttributeSet =
-      CreateDefaultSubobject<UDamageAttributeSet>(TEXT("DamageAttributeSet"));
-  StaminaAttributeSet =
-      CreateDefaultSubobject<UStaminaAttributeSet>(TEXT("StaminaAttributeSet"));
 }
 
 UAbilitySystemComponent *ACombatPlayerState::GetAbilitySystemComponent() const {
@@ -38,6 +33,8 @@ void ACombatPlayerState::SetPawnData(const UCombatPawnData *InPawnData) {
   // Clear any previously granted abilities/effects
   ClearPawnData();
 
+  PawnData = InPawnData;
+
   if (!InPawnData) {
     return;
   }
@@ -55,36 +52,13 @@ void ACombatPlayerState::SetPawnData(const UCombatPawnData *InPawnData) {
     }
   }
 
-  // Fallback: Grant legacy abilities if no AbilitySets are configured
-  if (InPawnData->AbilitySets.IsEmpty()) {
-    for (TSubclassOf<UGameplayAbility> AbilityClass :
-         InPawnData->GrantedAbilities) {
-      if (AbilityClass) {
-        FGameplayAbilitySpecHandle AbilityHandle =
-            AbilitySystemComponent->GiveAbility(
-                FGameplayAbilitySpec(AbilityClass, 1, INDEX_NONE, this));
-        if (AbilityHandle.IsValid()) {
-          GrantedAbilitySpecHandles.Add(AbilityHandle);
-        }
-      }
-    }
-
-    // Fallback: Grant legacy effects if no AbilitySets are configured
-    for (TSubclassOf<UGameplayEffect> EffectClass :
-         InPawnData->GrantedEffects) {
-      if (EffectClass) {
-        FGameplayEffectSpecHandle EffectHandle =
-            AbilitySystemComponent->MakeOutgoingSpec(
-                EffectClass, 1.0f, AbilitySystemComponent->MakeEffectContext());
-        if (EffectHandle.IsValid()) {
-          FActiveGameplayEffectHandle ActiveHandle =
-              AbilitySystemComponent->ApplyGameplayEffectSpecToTarget(
-                  *EffectHandle.Data.Get(), AbilitySystemComponent);
-          if (ActiveHandle.IsValid()) {
-            GrantedEffectHandles.Add(ActiveHandle);
-          }
-        }
-      }
+  // Add attribute sets from PawnData
+  for (TSubclassOf<UAttributeSet> AttributeSetClass :
+       InPawnData->AttributeSets) {
+    if (AttributeSetClass) {
+      UAttributeSet *NewAttributeSet =
+          NewObject<UAttributeSet>(this, AttributeSetClass);
+      AbilitySystemComponent->AddAttributeSetSubobject(NewAttributeSet);
     }
   }
 
@@ -129,22 +103,29 @@ void ACombatPlayerState::ClearPawnData() {
   }
 
   GrantedAbilitySetHandles.Reset();
+  PawnData = nullptr;
+}
 
-  // Remove legacy granted abilities
-  for (FGameplayAbilitySpecHandle &AbilityHandle : GrantedAbilitySpecHandles) {
-    if (AbilityHandle.IsValid()) {
-      AbilitySystemComponent->ClearAbility(AbilityHandle);
-    }
+void ACombatPlayerState::ResetAttributesToDefault() {
+  if (!AbilitySystemComponent) {
+    return;
   }
 
-  GrantedAbilitySpecHandles.Reset();
+  // Set base attributes to default values
+  AbilitySystemComponent->SetNumericAttributeBase(
+      UHealthAttributeSet::GetHealthAttribute(), DefaultMaxHP);
+  AbilitySystemComponent->SetNumericAttributeBase(
+      UHealthAttributeSet::GetMaxHealthAttribute(), DefaultMaxHP);
+  AbilitySystemComponent->SetNumericAttributeBase(
+      UStaminaAttributeSet::GetStaminaAttribute(), DefaultMaxStamina);
+  AbilitySystemComponent->SetNumericAttributeBase(
+      UStaminaAttributeSet::GetMaxStaminaAttribute(), DefaultMaxStamina);
 
-  // Remove legacy granted effects
-  for (FActiveGameplayEffectHandle &EffectHandle : GrantedEffectHandles) {
-    if (EffectHandle.IsValid()) {
-      AbilitySystemComponent->RemoveActiveGameplayEffect(EffectHandle);
-    }
-  }
-
-  GrantedEffectHandles.Reset();
+  // Override current values to ensure they are reset
+  AbilitySystemComponent->ApplyModToAttribute(
+      UHealthAttributeSet::GetHealthAttribute(), EGameplayModOp::Override,
+      DefaultMaxHP);
+  AbilitySystemComponent->ApplyModToAttribute(
+      UStaminaAttributeSet::GetStaminaAttribute(), EGameplayModOp::Override,
+      DefaultMaxStamina);
 }

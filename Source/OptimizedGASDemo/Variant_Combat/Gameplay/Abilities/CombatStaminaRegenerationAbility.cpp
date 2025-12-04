@@ -60,10 +60,16 @@ void UCombatStaminaRegenerationAbility::ActivateAbility(
   bool bIsPlayer = Cast<APlayerState>(ActorInfo->OwnerActor.Get()) != nullptr;
 
   if (bIsPlayer) {
-    // For players, apply regeneration effect immediately and continuously
+    // Apply regeneration effect only for players
     ApplyRegenerationEffect();
+
+    // For players, start timer to check attack state and manage regeneration
+    GetWorld()->GetTimerManager().SetTimer(
+        CheckTimer, this, &UCombatStaminaRegenerationAbility::CheckAttackState,
+        0.1f, true);
   } else {
-    // For enemies, listen to stamina changes
+    // For enemies, listen to stamina changes for stun/refill logic (no
+    // auto-regeneration)
     OnStaminaChangedDelegate.BindUObject(
         this, &UCombatStaminaRegenerationAbility::OnStaminaChanged);
     StaminaChangedDelegateHandle =
@@ -79,11 +85,21 @@ void UCombatStaminaRegenerationAbility::EndAbility(
     const FGameplayAbilityActivationInfo ActivationInfo,
     bool bReplicateEndAbility, bool bWasCancelled) {
 
-  RemoveRegenerationEffect();
+  // Check if this is a player character (has PlayerState as owner)
+  bool bIsPlayer = Cast<APlayerState>(ActorInfo->OwnerActor.Get()) != nullptr;
+
+  if (bIsPlayer) {
+    // Only remove regeneration effect for players
+    RemoveRegenerationEffect();
+  }
 
   // Clear timers
   if (RefillTimerHandle.IsValid()) {
     GetWorld()->GetTimerManager().ClearTimer(RefillTimerHandle);
+  }
+
+  if (CheckTimer.IsValid()) {
+    GetWorld()->GetTimerManager().ClearTimer(CheckTimer);
   }
 
   Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility,
@@ -134,6 +150,16 @@ void UCombatStaminaRegenerationAbility::OnStaminaChanged(
   if (bIsPlayer)
     return;
 
+  // Enemy logic: if stamina > 0 but not enough for attack (10), reset to 0
+  if (Data.NewValue > 0.0f && Data.NewValue < 10.0f) {
+    UAbilitySystemComponent *ASC =
+        GetAbilitySystemComponent(GetCurrentActorInfo());
+    if (ASC) {
+      ASC->SetNumericAttributeBase(UStaminaAttributeSet::GetStaminaAttribute(),
+                                   0.0f);
+    }
+  }
+
   // Enemy logic: refill after depletion and stun when depleted
   if (Data.NewValue <= 0.0f) {
     // Stamina depleted, apply stun effect
@@ -144,10 +170,66 @@ void UCombatStaminaRegenerationAbility::OnStaminaChanged(
   }
 }
 
+void UCombatStaminaRegenerationAbility::OnTagChanged(const FGameplayTag Tag,
+                                                     int32 NewCount) {
+  // Only handle player logic (enemies use stun when stamina depleted)
+  bool bIsPlayer =
+      Cast<APlayerState>(
+          GetAbilitySystemComponent(GetCurrentActorInfo())->GetOwnerActor()) !=
+      nullptr;
+  if (!bIsPlayer)
+    return;
+
+  if (Tag == FGameplayTag::RequestGameplayTag(FName("State.Attacking"))) {
+    if (NewCount > 0) {
+      // Attacking started, remove regeneration effect
+      RemoveRegenerationEffect();
+    } else {
+      // Attacking ended, reapply regeneration effect
+      ApplyRegenerationEffect();
+    }
+  }
+}
+
+void UCombatStaminaRegenerationAbility::CheckAttackState() {
+  UAbilitySystemComponent *ASC =
+      GetAbilitySystemComponent(GetCurrentActorInfo());
+  if (!ASC)
+    return;
+
+  // Only handle player logic (enemies use stun when stamina depleted)
+  bool bIsPlayer =
+      Cast<APlayerState>(
+          GetAbilitySystemComponent(GetCurrentActorInfo())->GetOwnerActor()) !=
+      nullptr;
+  if (!bIsPlayer)
+    return;
+
+  bool bIsAttacking = ASC->HasMatchingGameplayTag(
+      FGameplayTag::RequestGameplayTag(FName("State.Attacking")));
+
+  if (bIsAttacking) {
+    // Attacking, ensure no regeneration
+    if (ActiveEffectHandle.IsValid()) {
+      RemoveRegenerationEffect();
+    }
+  } else {
+    // Not attacking, ensure regeneration is active
+    if (!ActiveEffectHandle.IsValid()) {
+      ApplyRegenerationEffect();
+    }
+  }
+}
+
 void UCombatStaminaRegenerationAbility::ApplyRegenerationEffect() {
   UAbilitySystemComponent *ASC =
       GetAbilitySystemComponent(GetCurrentActorInfo());
   if (!ASC || !RegenerationEffectClass)
+    return;
+
+  // Only apply regeneration effect to players (enemies use refill logic)
+  bool bIsPlayer = Cast<APlayerState>(ASC->GetOwnerActor()) != nullptr;
+  if (!bIsPlayer)
     return;
 
   FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(

@@ -28,3 +28,18 @@ void UHealthAttributeSet::OnRep_MaxHealth(
     const FGameplayAttributeData &OldMaxHealth) {
   GAMEPLAYATTRIBUTE_REPNOTIFY(UHealthAttributeSet, MaxHealth, OldMaxHealth);
 }
+
+void UHealthAttributeSet::PreAttributeChange(
+    const FGameplayAttribute &Attribute, float &NewValue) {
+  Super::PreAttributeChange(Attribute, NewValue);
+
+  if (Attribute == GetHealthAttribute()) {
+    // Clamp health to not exceed max health
+    NewValue = FMath::Clamp(NewValue, 0.0f, GetMaxHealth());
+  }
+}
+
+void UHealthAttributeSet::PostAttributeChange(
+    const FGameplayAttribute &Attribute, float OldValue, float NewValue) {
+  Super::PostAttributeChange(Attribute, OldValue, NewValue);
+}

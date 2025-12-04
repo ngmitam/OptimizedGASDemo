@@ -90,13 +90,13 @@ void UCombatChargedAttackAbility::ActivateAbility(
     }
 
     // Apply stamina cost for the first loop immediately
+    // Set stamina used attribute for execution calculation
+    ASC->SetNumericAttributeBase(
+        UStaminaAttributeSet::GetStaminaUsedAttribute(), StaminaCost);
+
     FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(
         StaminaCostEffectClass, GetAbilityLevel(), ASC->MakeEffectContext());
     if (SpecHandle.IsValid()) {
-      // Set the stamina cost using SetByCaller
-      SpecHandle.Data.Get()->SetSetByCallerMagnitude(
-          FGameplayTag::RequestGameplayTag(FName("Data.StaminaCost")),
-          -StaminaCost);
       ASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), ASC);
     }
 
@@ -131,6 +131,20 @@ void UCombatChargedAttackAbility::ActivateAbility(
             CombatChar->GetStoredVelocity() *
                 CombatChar->GetAttackMomentumMultiplier(),
             true);
+      }
+    }
+
+    // Add camera shake for feedback (only for player)
+    if (ACombatCharacter *CombatChar = Cast<ACombatCharacter>(CombatBase)) {
+      if (CombatChar->GetAttackCameraShake() &&
+          CombatBase->IsPlayerControlled()) {
+        if (APlayerController *PC =
+                Cast<APlayerController>(CombatBase->GetController())) {
+          if (PC->PlayerCameraManager) {
+            PC->PlayerCameraManager->StartCameraShake(
+                CombatChar->GetAttackCameraShake());
+          }
+        }
       }
     }
 
@@ -264,13 +278,13 @@ void UCombatChargedAttackAbility::HandleChargedAttackLoop(
     }
 
     // Apply stamina cost effect
+    // Set stamina used attribute for execution calculation
+    ASC->SetNumericAttributeBase(
+        UStaminaAttributeSet::GetStaminaUsedAttribute(), StaminaCost);
+
     FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(
         StaminaCostEffectClass, GetAbilityLevel(), ASC->MakeEffectContext());
     if (SpecHandle.IsValid()) {
-      // Set the stamina cost using SetByCaller
-      SpecHandle.Data.Get()->SetSetByCallerMagnitude(
-          FGameplayTag::RequestGameplayTag(FName("Data.StaminaCost")),
-          -StaminaCost);
       ASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), ASC);
     }
 

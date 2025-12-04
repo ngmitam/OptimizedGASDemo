@@ -63,14 +63,7 @@ ACombatBase::ACombatBase() {
     PawnData->DefaultKnockbackImpulse = MeleeKnockbackImpulse;
     PawnData->DefaultLaunchImpulse = MeleeLaunchImpulse;
 
-    // Set default abilities (fallback when no AbilitySets are configured)
-    PawnData->GrantedAbilities.Add(UCombatReceiveDamageAbility::StaticClass());
-    PawnData->GrantedAbilities.Add(UCombatDeathAbility::StaticClass());
-    PawnData->GrantedAbilities.Add(UCombatTraceAttackAbility::StaticClass());
-    PawnData->GrantedAbilities.Add(UCombatChargedAttackAbility::StaticClass());
-    PawnData->GrantedAbilities.Add(UCombatComboAttackAbility::StaticClass());
-    PawnData->GrantedAbilities.Add(
-        UCombatStaminaRegenerationAbility::StaticClass());
+    // Note: AbilitySets should be configured in the editor or derived classes
     // Note: Lock ability is set in subclasses (LockToggle for player, Lockable
     // for enemy)
   }

@@ -4,21 +4,15 @@
 #include "Attributes/HealthAttributeSet.h"
 #include "GameplayTagsManager.h"
 #include "GameplayEffect.h"
+#include "Executions/CombatExecutionCalculation.h"
 
 UCombatDamageGameplayEffect::UCombatDamageGameplayEffect() {
   // Set duration policy to instant
   DurationPolicy = EGameplayEffectDurationType::Instant;
 
-  // Modifiers: Reduce health by damage amount using SetByCaller (note: damage
-  // values should be negative for health reduction)
-  FGameplayModifierInfo HealthModifier;
-  HealthModifier.Attribute = UHealthAttributeSet::GetHealthAttribute();
-  HealthModifier.ModifierOp = EGameplayModOp::Additive;
-  FGameplayTag DamageTag =
-      FGameplayTag::RequestGameplayTag(FName("Data.Damage"));
-  FSetByCallerFloat SetByCaller;
-  SetByCaller.DataTag = DamageTag;
-  HealthModifier.ModifierMagnitude =
-      FGameplayEffectModifierMagnitude(SetByCaller);
-  Modifiers.Add(HealthModifier);
+  // Use execution calculation for damage
+  FGameplayEffectExecutionDefinition ExecutionDef;
+  ExecutionDef.CalculationClass =
+      UCombatDamageExecutionCalculation::StaticClass();
+  Executions.Add(ExecutionDef);
 }

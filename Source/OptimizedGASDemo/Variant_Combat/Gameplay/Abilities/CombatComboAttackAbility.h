@@ -34,6 +34,9 @@ public:
   /** Handle combo next event */
   void HandleComboNext(const FGameplayEventData *EventData);
 
+  /** Handle combo start event for input caching */
+  void HandleComboStart(const FGameplayEventData *EventData);
+
   /** Called when montage ends */
   void OnMontageEnded(UAnimMontage *Montage, bool bInterrupted);
 
@@ -48,6 +51,10 @@ public:
   /** Effect class to use for setting stamina used */
   UPROPERTY(EditAnywhere, Category = "Combo")
   TSubclassOf<UGameplayEffect> StaminaUsedEffectClass;
+
+  /** Time tolerance for combo input caching */
+  UPROPERTY(EditAnywhere, Category = "Combo")
+  float ComboInputCacheTimeTolerance = 1.0f;
 
 protected:
   /** Current combo count */
@@ -64,4 +71,10 @@ protected:
 
   /** Montage ended delegate */
   FOnMontageEnded MontageEndedDelegate;
+
+  /** Cached combo input time */
+  float CachedComboInputTime = 0.0f;
+
+  /** Whether the combo has started */
+  bool bComboStarted = false;
 };

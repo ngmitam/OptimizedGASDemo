@@ -72,6 +72,10 @@ protected:
 
 protected:
   virtual void BeginPlay() override;
+  virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
+  /** Check if locked target is still valid */
+  void CheckLockedTargetValidity();
 
   /** The currently locked target */
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Lock System",
@@ -103,4 +107,15 @@ protected:
 
   /** Decal component for visual feedback */
   UDecalComponent *LockDecal;
+
+  /** Interval to check if locked target is still valid (seconds) */
+  UPROPERTY(EditAnywhere, Category = "Lock System",
+            meta = (ClampMin = 0.1, Units = "s"))
+  float CheckInterval = 0.5f;
+
+  /** Cached dead state tag */
+  FGameplayTag StateDeadTag;
+
+  /** Timer handle for checking locked target validity */
+  FTimerHandle CheckTimerHandle;
 };

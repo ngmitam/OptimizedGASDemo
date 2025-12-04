@@ -162,6 +162,9 @@ public:
   /** Overrides landing to reset damage ragdoll physics */
   virtual void Landed(const FHitResult &Hit) override;
 
+  /** Tick function for debug display */
+  virtual void Tick(float DeltaTime) override;
+
 protected:
   /** Gameplay initialization */
   virtual void BeginPlay() override;

@@ -8,6 +8,10 @@ Purpose
 -   Point to the key classes and files to get started.
 -   Provide implementation notes, tips for extending, and quick troubleshooting guidance.
 
+For detailed instructions on creating and configuring PawnData assets for players and enemies, see [`PAWNDATA_GUIDE.md`](PAWNDATA_GUIDE.md).
+
+For detailed instructions on creating and configuring InputConfig assets for ability input mapping, see [`INPUTCONFIG_GUIDE.md`](INPUTCONFIG_GUIDE.md).
+
 ### High-level contract
 
 -   Inputs: gameplay events (e.g. `Event.Trace.Attack`, `Event.Damage.Received`), input actions (combo/charged attack), and GameplayEffect/SetByCaller values.
@@ -20,11 +24,11 @@ Purpose
     -   `Source/OptimizedGASDemo/Variant_Combat/CombatPlayerState.h/.cpp`
 -   `UHealthAttributeSet` — Health, MaxHealth
     -   `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Attributes/HealthAttributeSet.h/.cpp`
--   `UDamageAttributeSet` — Damage, KnockbackImpulse, LaunchImpulse, TraceDistance, TraceRadius
+-   `UDamageAttributeSet` — Damage, KnockbackImpulse, LaunchImpulse
     -   `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Attributes/DamageAttributeSet.h/.cpp`
--   `UStaminaAttributeSet` — Stamina, MaxStamina
+-   `UStaminaAttributeSet` — Stamina, MaxStamina, StaminaUsed
     -   `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Attributes/StaminaAttributeSet.h/.cpp`
--   `UMovementAttributeSet` — Movement-related attributes
+-   `UMovementAttributeSet` — Movement-related attributes (for stun effects)
     -   `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Attributes/MovementAttributeSet.h/.cpp`
 -   Abilities (activation, commit, use of attributes and GameplayEffects):
     -   `CombatTraceAttackAbility` — performs sweep traces and uses attributes for damage/knockback
@@ -37,7 +41,7 @@ Purpose
         -   `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Abilities/CombatChargedAttackAbility.*`
     -   `CombatDeathAbility` — handles death logic and effects
         -   `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Abilities/CombatDeathAbility.*`
-    -   `CombatStaminaRegenerationAbility` — passive stamina regeneration
+    -   `CombatStaminaRegenerationAbility` — passive stamina regeneration with different behaviors for players/enemies
         -   `Source/OptimizedGASDemo/Variant_Combat/Gameplay/Abilities/CombatStaminaRegenerationAbility.*`
     -   Other abilities: `CombatLockableAbility`, `CombatLockToggleAbility`, `CombatNotifyEnemiesAbility`
 -   Character and integration points:
@@ -72,14 +76,14 @@ AbilitySet->GiveToAbilitySystem(ASC, AbilitySetHandle, this);
 AbilitySet->TakeFromAbilitySystem(ASC, AbilitySetHandle);
 ```
 
-#### Migration from Legacy Arrays
+#### Migration from Legacy Arrays - COMPLETED
 
-The old `GrantedAbilities` and `GrantedEffects` arrays in `UCombatPawnData` are now deprecated. Use `AbilitySets` instead:
+The old `GrantedAbilities` and `GrantedEffects` arrays in `UCombatPawnData` have been removed. The project now exclusively uses `AbilitySets`:
 
 1. Create a `UCombatAbilitySet` asset
 2. Add abilities and effects to the asset
 3. Reference the asset in `UCombatPawnData::AbilitySets`
-4. The system will automatically handle granting/removing with proper cleanup
+4. The system automatically handles granting/removing with proper cleanup
 
 ### Lyra Compliance Status
 
@@ -87,15 +91,16 @@ This project follows Lyra standards where applicable for a combat-focused GAS im
 
 #### ✅ Compliant Features
 
--   **GAS Architecture**: ASC on PlayerState, separate AttributeSets, PawnData-driven granting
+-   **GAS Architecture**: ASC on PlayerState, separate AttributeSets (Health, Damage, Stamina, Movement), PawnData-driven granting
 -   **Replication**: Proper COND_OwnerOnly for UI attributes, COND_None for gameplay
 -   **GrantedHandles Pattern**: Implemented for ability/effect management
 -   **AbilitySet Assets**: UCombatAbilitySet for modular ability granting
--   **Input Integration**: Input Actions mapped to abilities via AbilitySets
+-   **Input Integration**: Input Actions mapped to abilities via AbilitySets and InputConfig
+-   **Stamina System**: Comprehensive stamina mechanics with regeneration, costs, and stun effects
+-   **Attribute System Refactor**: Split UCombatAttributeSet into specialized attribute sets
 
 #### ❌ Missing Lyra Systems
 
--   **InputConfig**: Centralized input configuration (consider implementing UCombatInputConfig)
 -   **CameraMode**: Dynamic camera modes (e.g., for aiming, different perspectives)
 -   **HUD Management**: Modular HUD system with layout switching
 -   **Pawn/Controller Extensions**: Extension components for modular functionality

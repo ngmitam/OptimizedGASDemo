@@ -52,12 +52,6 @@ ACombatEnemy::ACombatEnemy() {
   MovementAttributeSet = CreateDefaultSubobject<UMovementAttributeSet>(
       TEXT("MovementAttributeSet"));
 
-  // Add lockable ability for enemy
-  if (PawnData) {
-    PawnData->GrantedAbilities.Add(UCombatLockableAbility::StaticClass());
-    PawnData->DefaultDamage = 10.0f;
-  }
-
   // set the AI Controller class by default
   AIControllerClass = ACombatAIController::StaticClass();
 
@@ -99,6 +93,34 @@ void ACombatEnemy::AttackMontageEnded(UAnimMontage *Montage,
 
   // call the attack completed delegate so the StateTree can continue execution
   OnAttackCompleted.ExecuteIfBound();
+}
+
+void ACombatEnemy::Tick(float DeltaTime) {
+  Super::Tick(DeltaTime);
+
+#if !UE_BUILD_SHIPPING
+  // Debug display for stamina used and damage taken
+  if (UAbilitySystemComponent *ASC = GetAbilitySystemComponent()) {
+    float Stamina =
+        ASC->GetNumericAttribute(UStaminaAttributeSet::GetStaminaAttribute());
+    float MaxStamina = ASC->GetNumericAttribute(
+        UStaminaAttributeSet::GetMaxStaminaAttribute());
+    float StaminaUsed = ASC->GetNumericAttribute(
+        UStaminaAttributeSet::GetStaminaUsedAttribute());
+    float Health =
+        ASC->GetNumericAttribute(UHealthAttributeSet::GetHealthAttribute());
+    float MaxHealth =
+        ASC->GetNumericAttribute(UHealthAttributeSet::GetMaxHealthAttribute());
+
+    FString DebugText =
+        FString::Printf(TEXT("Enemy - Stamina: %.1f/%.1f, Stamina Used: %.1f, "
+                             "Health: %.1f/%.1f"),
+                        Stamina, MaxStamina, StaminaUsed, Health, MaxHealth);
+
+    DrawDebugString(GetWorld(), GetActorLocation() + FVector(0, 0, 150),
+                    DebugText, nullptr, FColor::Red, 0.0f, true, 1.0f);
+  }
+#endif
 }
 
 void ACombatEnemy::HandleDeath() {
@@ -218,55 +240,25 @@ void ACombatEnemy::InitializePawnData() {
           ASC->AddAttributeSetSubobject(NewAttributeSet);
         }
       }
-
-      // Fallback: Grant abilities directly if no ability sets (only if not
-      // already granted)
-      for (TSubclassOf<UGameplayAbility> AbilityClass :
-           PawnData->GrantedAbilities) {
-        if (AbilityClass && !ASC->FindAbilitySpecFromClass(AbilityClass)) {
-          FGameplayAbilitySpec AbilitySpec(AbilityClass, 1);
-          ASC->GiveAbility(AbilitySpec);
-        }
-      }
-
-      // Fallback: Apply granted effects directly (only if not already active)
-      for (TSubclassOf<UGameplayEffect> EffectClass :
-           PawnData->GrantedEffects) {
-        if (EffectClass) {
-          FGameplayEffectQuery Query;
-          Query.EffectDefinition = EffectClass;
-          TArray<FActiveGameplayEffectHandle> ActiveEffects =
-              ASC->GetActiveEffects(Query);
-          if (ActiveEffects.Num() == 0) {
-            FGameplayEffectSpecHandle EffectSpecHandle = ASC->MakeOutgoingSpec(
-                EffectClass, 1.0f, ASC->MakeEffectContext());
-            if (EffectSpecHandle.IsValid()) {
-              ASC->ApplyGameplayEffectSpecToTarget(*EffectSpecHandle.Data.Get(),
-                                                   ASC);
-            }
-          }
-        }
-      }
-
-      // Set attributes from pawn data
-      ASC->SetNumericAttributeBase(UHealthAttributeSet::GetHealthAttribute(),
-                                   PawnData->DefaultHealth);
-      ASC->SetNumericAttributeBase(UHealthAttributeSet::GetMaxHealthAttribute(),
-                                   PawnData->DefaultMaxHealth);
-      ASC->SetNumericAttributeBase(UStaminaAttributeSet::GetStaminaAttribute(),
-                                   PawnData->DefaultStamina);
-      ASC->SetNumericAttributeBase(
-          UStaminaAttributeSet::GetMaxStaminaAttribute(),
-          PawnData->DefaultMaxStamina);
-      ASC->SetNumericAttributeBase(UDamageAttributeSet::GetDamageAttribute(),
-                                   PawnData->DefaultDamage);
-      ASC->SetNumericAttributeBase(
-          UDamageAttributeSet::GetKnockbackImpulseAttribute(),
-          PawnData->DefaultKnockbackImpulse);
-      ASC->SetNumericAttributeBase(
-          UDamageAttributeSet::GetLaunchImpulseAttribute(),
-          PawnData->DefaultLaunchImpulse);
     }
+
+    // Set attributes from pawn data
+    ASC->SetNumericAttributeBase(UHealthAttributeSet::GetHealthAttribute(),
+                                 PawnData->DefaultHealth);
+    ASC->SetNumericAttributeBase(UHealthAttributeSet::GetMaxHealthAttribute(),
+                                 PawnData->DefaultMaxHealth);
+    ASC->SetNumericAttributeBase(UStaminaAttributeSet::GetStaminaAttribute(),
+                                 PawnData->DefaultStamina);
+    ASC->SetNumericAttributeBase(UStaminaAttributeSet::GetMaxStaminaAttribute(),
+                                 PawnData->DefaultMaxStamina);
+    ASC->SetNumericAttributeBase(UDamageAttributeSet::GetDamageAttribute(),
+                                 PawnData->DefaultDamage);
+    ASC->SetNumericAttributeBase(
+        UDamageAttributeSet::GetKnockbackImpulseAttribute(),
+        PawnData->DefaultKnockbackImpulse);
+    ASC->SetNumericAttributeBase(
+        UDamageAttributeSet::GetLaunchImpulseAttribute(),
+        PawnData->DefaultLaunchImpulse);
   }
 }
 

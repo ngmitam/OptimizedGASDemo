@@ -45,6 +45,10 @@ protected:
   UPROPERTY(EditDefaultsOnly, Category = "Attack", meta = (ClampMin = 0))
   float TraceRadius = 75.0f;
 
+  /** Multiplier for stamina used to damage scaling */
+  UPROPERTY(EditDefaultsOnly, Category = "Attack", meta = (ClampMin = 0))
+  float StaminaDamageMultiplier = 1.5f;
+
   /** Cached trigger event data */
   const FGameplayEventData *CachedTriggerEventData = nullptr;
 

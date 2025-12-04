@@ -5,9 +5,6 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerState.h"
 #include "AbilitySystemInterface.h"
-#include "Attributes/HealthAttributeSet.h"
-#include "Attributes/DamageAttributeSet.h"
-#include "Gameplay/Attributes/StaminaAttributeSet.h"
 #include "Data/CombatPawnData.h"
 #include "Gameplay/Abilities/CombatAbilitySet.h"
 #include "CombatPlayerState.generated.h"
@@ -41,26 +38,17 @@ public:
   /** Get default max stamina */
   float GetDefaultMaxStamina() const { return DefaultMaxStamina; }
 
+  /** Reset attributes to default values */
+  void ResetAttributesToDefault();
+
+  /** Get pawn data */
+  const UCombatPawnData *GetPawnData() const { return PawnData; }
+
 protected:
   /** The ability system component for this player state */
   UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
             meta = (AllowPrivateAccess = "true"))
   UAbilitySystemComponent *AbilitySystemComponent;
-
-  /** The health attribute set for this player state */
-  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
-            meta = (AllowPrivateAccess = "true"))
-  UHealthAttributeSet *HealthAttributeSet;
-
-  /** The stamina attribute set for this player state */
-  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
-            meta = (AllowPrivateAccess = "true"))
-  UStaminaAttributeSet *StaminaAttributeSet;
-
-  /** The damage attribute set for this player state */
-  UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GAS",
-            meta = (AllowPrivateAccess = "true"))
-  UDamageAttributeSet *DamageAttributeSet;
 
   /** Default max HP for the player */
   UPROPERTY(EditAnywhere, Category = "Attributes",
@@ -76,14 +64,10 @@ protected:
   virtual void BeginPlay() override;
 
 private:
+  /** Current pawn data */
+  UPROPERTY()
+  const UCombatPawnData *PawnData = nullptr;
+
   /** Handles for currently granted ability sets */
   TArray<FCombatAbilitySetHandle> GrantedAbilitySetHandles;
-
-  /** Handles for legacy granted abilities (fallback when no AbilitySets
-   * configured) */
-  TArray<FGameplayAbilitySpecHandle> GrantedAbilitySpecHandles;
-
-  /** Handles for legacy granted effects (fallback when no AbilitySets
-   * configured) */
-  TArray<FActiveGameplayEffectHandle> GrantedEffectHandles;
 };

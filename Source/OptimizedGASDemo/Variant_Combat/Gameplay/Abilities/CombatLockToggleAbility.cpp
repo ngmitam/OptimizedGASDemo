@@ -183,8 +183,19 @@ void UCombatLockToggleAbility::Server_ToggleLockState(
 
     // Spawn decal for visual feedback
     if (LockSystem->GetLockedTarget() && LockSystem->GetLockDecalMaterial()) {
+      // Calculate decal size based on target's capsule component
+      FVector DecalSize = FVector(100.0f, 100.0f, 100.0f);
+      if (UCapsuleComponent *Capsule = Cast<UCapsuleComponent>(
+              LockSystem->GetLockedTarget()->GetRootComponent())) {
+        float CapsuleRadius = Capsule->GetScaledCapsuleRadius();
+        float CapsuleHalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+        // Make decal slightly larger than the capsule for better visibility
+        DecalSize = FVector(CapsuleRadius * 2.5f, CapsuleRadius * 2.5f,
+                            CapsuleHalfHeight * 2.2f);
+      }
+
       UDecalComponent *NewDecal = UGameplayStatics::SpawnDecalAttached(
-          LockSystem->GetLockDecalMaterial(), FVector(100.0f, 100.0f, 100.0f),
+          LockSystem->GetLockDecalMaterial(), DecalSize,
           LockSystem->GetLockedTarget()->GetRootComponent(), NAME_None,
           FVector(0, 0, 0), FRotator(0, 0, 0), EAttachLocation::SnapToTarget,
           0.0f);

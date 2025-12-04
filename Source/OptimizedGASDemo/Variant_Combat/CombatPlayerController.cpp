@@ -78,17 +78,7 @@ void ACombatPlayerController::SetRespawnTransform(
 void ACombatPlayerController::OnPawnDestroyed(AActor *DestroyedActor) {
   // Reset to default values before spawning
   if (ACombatPlayerState *PS = Cast<ACombatPlayerState>(PlayerState)) {
-    if (UAbilitySystemComponent *ASC = PS->GetAbilitySystemComponent()) {
-      ASC->SetNumericAttributeBase(UHealthAttributeSet::GetHealthAttribute(),
-                                   PS->GetDefaultMaxHP());
-      ASC->SetNumericAttributeBase(UHealthAttributeSet::GetMaxHealthAttribute(),
-                                   PS->GetDefaultMaxHP());
-      ASC->SetNumericAttributeBase(UStaminaAttributeSet::GetStaminaAttribute(),
-                                   PS->GetDefaultMaxStamina());
-      ASC->SetNumericAttributeBase(
-          UStaminaAttributeSet::GetMaxStaminaAttribute(),
-          PS->GetDefaultMaxStamina());
-    }
+    PS->ResetAttributesToDefault();
   }
 
   // spawn a new character at the respawn transform

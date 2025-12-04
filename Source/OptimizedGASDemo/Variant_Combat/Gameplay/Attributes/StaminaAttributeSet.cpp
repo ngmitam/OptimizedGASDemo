@@ -47,3 +47,8 @@ void UStaminaAttributeSet::PreAttributeChange(
 
   Super::PreAttributeChange(Attribute, NewValue);
 }
+
+void UStaminaAttributeSet::PostAttributeChange(
+    const FGameplayAttribute &Attribute, float OldValue, float NewValue) {
+  Super::PostAttributeChange(Attribute, OldValue, NewValue);
+}

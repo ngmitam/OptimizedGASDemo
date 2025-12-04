@@ -8,6 +8,7 @@
 #include "GameplayEffect.h"
 #include "InputAction.h"
 #include "Gameplay/Abilities/CombatAbilitySet.h"
+#include "CombatInputConfig.h"
 #include "CombatPawnData.generated.h"
 
 class UAttributeSet;
@@ -22,10 +23,6 @@ struct FCombatAbilitySetWithInput {
   /** Ability set to grant */
   UPROPERTY(EditDefaultsOnly, Category = AbilitySet)
   TObjectPtr<UCombatAbilitySet> AbilitySet;
-
-  /** Input actions to bind to abilities in this set */
-  UPROPERTY(EditDefaultsOnly, Category = AbilitySet)
-  TArray<TObjectPtr<UInputAction>> InputActions;
 };
 
 /**
@@ -78,28 +75,28 @@ public:
   UPROPERTY(EditDefaultsOnly, Category = "Attributes", meta = (ClampMin = 0))
   float DefaultMaxStamina = 100.0f;
 
-  /** Granted abilities (legacy - use AbilitySets instead) */
-  UPROPERTY(EditDefaultsOnly, Category = "Abilities (Legacy)",
-            meta = (DeprecatedProperty,
-                    DeprecationMessage = "Use AbilitySets instead"))
-  TArray<TSubclassOf<UGameplayAbility>> GrantedAbilities;
-
-  /** Granted effects (legacy - use AbilitySets instead) */
-  UPROPERTY(EditDefaultsOnly, Category = "Effects (Legacy)",
-            meta = (DeprecatedProperty,
-                    DeprecationMessage = "Use AbilitySets instead"))
-  TArray<TSubclassOf<UGameplayEffect>> GrantedEffects;
-
   /** Granted ability sets with input mapping */
   UPROPERTY(EditDefaultsOnly, Category = "Abilities")
   TArray<FCombatAbilitySetWithInput> AbilitySets;
 
+  /** Input configuration for this pawn */
+  UPROPERTY(EditDefaultsOnly, Category = "Input")
+  TObjectPtr<UCombatInputConfig> InputConfig;
+
+  /** Damage multiplier for execution calculations */
+  UPROPERTY(EditDefaultsOnly, Category = "Execution", meta = (ClampMin = 0))
+  float DamageMultiplier = 1.0f;
+
+  /** Stamina cost multiplier for execution calculations */
+  UPROPERTY(EditDefaultsOnly, Category = "Execution", meta = (ClampMin = 0))
+  float StaminaMultiplier = 1.0f;
+
   /** Load attributes from data table */
   void LoadFromDataTable();
 
-  /** Get all granted abilities from both AbilitySets and legacy arrays */
+  /** Get all granted abilities from AbilitySets*/
   TArray<TSubclassOf<UGameplayAbility>> GetAllGrantedAbilities() const;
 
-  /** Get all granted effects from both AbilitySets and legacy arrays */
+  /** Get all granted effects from AbilitySets*/
   TArray<TSubclassOf<UGameplayEffect>> GetAllGrantedEffects() const;
 };

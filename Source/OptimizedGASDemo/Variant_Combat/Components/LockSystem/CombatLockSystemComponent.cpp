@@ -8,10 +8,11 @@
 #include "AbilitySystemGlobals.h"
 #include "DrawDebugHelpers.h"
 #include "Net/UnrealNetwork.h"
+#include "TimerManager.h"
 #include "CombatCharacter.h"
 
 UCombatLockSystemComponent::UCombatLockSystemComponent() {
-  PrimaryComponentTick.bCanEverTick = true;
+  PrimaryComponentTick.bCanEverTick = false;
   bIsLocked = false;
 }
 
@@ -23,19 +24,84 @@ void UCombatLockSystemComponent::GetLifetimeReplicatedProps(
   DOREPLIFETIME(UCombatLockSystemComponent, bIsLocked);
 }
 
-void UCombatLockSystemComponent::BeginPlay() { Super::BeginPlay(); }
+void UCombatLockSystemComponent::BeginPlay() {
+  Super::BeginPlay();
+  StateDeadTag = FGameplayTag::RequestGameplayTag(FName("State.Dead"));
+
+  // Set up timer to check locked target validity periodically
+  GetWorld()->GetTimerManager().SetTimer(
+      CheckTimerHandle, this,
+      &UCombatLockSystemComponent::CheckLockedTargetValidity, CheckInterval,
+      true);
+}
+
+void UCombatLockSystemComponent::EndPlay(
+    const EEndPlayReason::Type EndPlayReason) {
+  Super::EndPlay(EndPlayReason);
+
+  // Clear the timer
+  if (CheckTimerHandle.IsValid()) {
+    GetWorld()->GetTimerManager().ClearTimer(CheckTimerHandle);
+  }
+}
+
+void UCombatLockSystemComponent::CheckLockedTargetValidity() {
+  // First check if owner is dead - if so, unlock immediately
+  AActor *Owner = GetOwner();
+  if (Owner) {
+    UAbilitySystemComponent *OwnerASC =
+        UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(Owner);
+    if (OwnerASC && OwnerASC->HasMatchingGameplayTag(StateDeadTag)) {
+      // Owner is dead, unlock and clean up decal
+      if (LockDecal) {
+        LockDecal->DestroyComponent();
+        LockDecal = nullptr;
+      }
+      SetLockedTarget(nullptr);
+      SetIsLocked(false);
+      return;
+    }
+  }
+
+  if (!LockedTarget || !LockedTarget->IsValidLowLevel()) {
+    // Target doesn't exist anymore
+    SetLockedTarget(nullptr);
+    SetIsLocked(false);
+  } else {
+    // Check if target is dead
+    UAbilitySystemComponent *ASC =
+        UAbilitySystemGlobals::GetAbilitySystemComponentFromActor(LockedTarget);
+    if (ASC && ASC->HasMatchingGameplayTag(StateDeadTag)) {
+      // Target is dead, unlock
+      SetLockedTarget(nullptr);
+      SetIsLocked(false);
+    }
+  }
+}
 
 void UCombatLockSystemComponent::OnRep_LockedTarget() {
   // Client syncs visual feedback when locked target changes
-  if (LockedTarget && LockDecalMaterial && GetOwnerRole() != ROLE_Authority) {
+  if (LockedTarget && LockDecalMaterial) {
     // Recreate decal on client
     if (LockDecal) {
       LockDecal->DestroyComponent();
     }
+
+    // Calculate decal size based on target's capsule
+    FVector DecalSize = FVector(100.0f, 100.0f, 100.0f); // Default
+    if (ACombatBase *CombatBase = Cast<ACombatBase>(LockedTarget)) {
+      if (UCapsuleComponent *Capsule = CombatBase->GetCapsuleComponent()) {
+        float Radius = Capsule->GetScaledCapsuleRadius();
+        float HalfHeight = Capsule->GetScaledCapsuleHalfHeight();
+        // Set decal size to fit the capsule base (circle under feet)
+        DecalSize = FVector(Radius, Radius, HalfHeight);
+      }
+    }
+
     LockDecal = UGameplayStatics::SpawnDecalAttached(
-        LockDecalMaterial, FVector(100.0f, 100.0f, 100.0f),
-        LockedTarget->GetRootComponent(), NAME_None, FVector(0, 0, 0),
-        FRotator(0, 0, 0), EAttachLocation::SnapToTarget, 0.0f);
+        LockDecalMaterial, DecalSize, LockedTarget->GetRootComponent(),
+        NAME_None, FVector(0, 0, 0), FRotator(0, 0, 0),
+        EAttachLocation::SnapToTarget, 0.0f);
   } else if (!LockedTarget && LockDecal) {
     LockDecal->DestroyComponent();
     LockDecal = nullptr;

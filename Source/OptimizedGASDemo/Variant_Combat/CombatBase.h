@@ -46,7 +46,7 @@ protected:
 
   /** Pawn data for attributes and abilities */
   UPROPERTY(EditDefaultsOnly, Category = "GAS")
-  UCombatPawnData *PawnData;
+  TObjectPtr<UCombatPawnData> PawnData;
   /** Name of the pelvis bone, for damage ragdoll physics */
   UPROPERTY(EditAnywhere, Category = "Damage")
   FName PelvisBoneName;
@@ -174,9 +174,6 @@ public:
 
   /** Get pelvis bone name */
   FName GetPelvisBoneName() const { return PelvisBoneName; }
-
-  /** Get combo input cache time tolerance */
-  virtual float GetComboInputCacheTimeTolerance() const { return 1.0f; }
 
   /** Get danger trace distance */
   float GetDangerTraceDistance() const { return DangerTraceDistance; }

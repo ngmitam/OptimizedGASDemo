@@ -11,7 +11,8 @@ UCombatStaminaRegenerationGameplayEffect::
 
   // Set periodic execution every 0.1 seconds
   Period = 0.1f;
-  bExecutePeriodicEffectOnApplication = true;
+  bExecutePeriodicEffectOnApplication =
+      false; // Don't execute on application to avoid magnitude issues
 
   // Modifiers: Increase stamina by rate * period per period
   FGameplayModifierInfo StaminaRegenModifier;

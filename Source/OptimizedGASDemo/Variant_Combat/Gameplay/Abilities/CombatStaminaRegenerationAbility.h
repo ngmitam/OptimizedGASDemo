@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Abilities/CombatGameplayAbility.h"
+#include "AbilitySystemComponent.h"
 #include "CombatStaminaRegenerationAbility.generated.h"
 
 class UCombatStaminaRegenerationGameplayEffect;
@@ -11,7 +12,8 @@ class UCombatStaminaRegenerationGameplayEffect;
 /**
  * Ability that handles stamina regeneration for characters.
  * - Player: Continuous regeneration over time when not attacking
- * - Enemy: Refill stamina after depletion delay
+ * - Enemy: No continuous regeneration, reset to 0 if insufficient stamina for
+ * attack, refill to max after 10 seconds when stamina reaches 0
  */
 UCLASS()
 class UCombatStaminaRegenerationAbility : public UCombatGameplayAbility {
@@ -44,6 +46,12 @@ protected:
 
   /** Handle stamina change for enemies */
   void OnStaminaChanged(const FOnAttributeChangeData &Data);
+
+  /** Handle tag changes for attacking state */
+  void OnTagChanged(const FGameplayTag Tag, int32 NewCount);
+
+  /** Check attack state and manage regeneration */
+  void CheckAttackState();
 
   /** Apply regeneration effect for players */
   void ApplyRegenerationEffect();
@@ -85,4 +93,7 @@ protected:
 
   /** Delegate for stamina changes */
   FOnGameplayAttributeValueChange::FDelegate OnStaminaChangedDelegate;
+
+  /** Timer handle for attack state check */
+  FTimerHandle CheckTimer;
 };

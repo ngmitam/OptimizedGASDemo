@@ -6,6 +6,7 @@
 #include "CombatLifeBar.h"
 #include "CombatPlayerController.h"
 #include "CombatPlayerState.h"
+#include "Attributes/HealthAttributeSet.h"
 #include "Attributes/StaminaAttributeSet.h"
 #include "Attributes/MovementAttributeSet.h"
 #include "Components/CapsuleComponent.h"
@@ -63,13 +64,6 @@ ACombatCharacter::ACombatCharacter() {
   // create the lock system component
   LockSystemComponent = CreateDefaultSubobject<UCombatLockSystemComponent>(
       TEXT("LockSystemComponent"));
-
-  // Add lock toggle ability for player
-  if (PawnData) {
-    PawnData->GrantedAbilities.Add(UCombatLockToggleAbility::StaticClass());
-    PawnData->DefaultDamage = 10.0f;
-  }
-
   // set the player tag
   Tags.Add(FName("Player"));
 }
@@ -104,21 +98,6 @@ void ACombatCharacter::Look(const FInputActionValue &Value) {
 
   // route the input
   DoLook(LookAxisVector.X, LookAxisVector.Y);
-}
-
-void ACombatCharacter::ComboAttackPressed() {
-  // route the input
-  DoComboAttackStart();
-}
-
-void ACombatCharacter::ChargedAttackPressed() {
-  // route the input
-  DoChargedAttackStart();
-}
-
-void ACombatCharacter::ChargedAttackReleased() {
-  // route the input
-  DoChargedAttackEnd();
 }
 
 void ACombatCharacter::ToggleCamera() {
@@ -207,6 +186,30 @@ void ACombatCharacter::AttackMontageEnded(UAnimMontage *Montage,
 void ACombatCharacter::Tick(float DeltaTime) {
   Super::Tick(DeltaTime);
   UpdateCameraLock(DeltaTime);
+
+#if !UE_BUILD_SHIPPING
+  // Debug display for stamina used and damage taken
+  if (UAbilitySystemComponent *ASC = GetAbilitySystemComponent()) {
+    float Stamina =
+        ASC->GetNumericAttribute(UStaminaAttributeSet::GetStaminaAttribute());
+    float MaxStamina = ASC->GetNumericAttribute(
+        UStaminaAttributeSet::GetMaxStaminaAttribute());
+    float StaminaUsed = ASC->GetNumericAttribute(
+        UStaminaAttributeSet::GetStaminaUsedAttribute());
+    float Health =
+        ASC->GetNumericAttribute(UHealthAttributeSet::GetHealthAttribute());
+    float MaxHealth =
+        ASC->GetNumericAttribute(UHealthAttributeSet::GetMaxHealthAttribute());
+
+    FString DebugText =
+        FString::Printf(TEXT("Player - Stamina: %.1f/%.1f, Stamina Used: %.1f, "
+                             "Health: %.1f/%.1f"),
+                        Stamina, MaxStamina, StaminaUsed, Health, MaxHealth);
+
+    DrawDebugString(GetWorld(), GetActorLocation() + FVector(0, 0, 150),
+                    DebugText, nullptr, FColor::Yellow, 0.0f, true, 1.0f);
+  }
+#endif
 }
 
 void ACombatCharacter::DoMove(float Right, float Forward) {
@@ -234,63 +237,6 @@ void ACombatCharacter::DoLook(float Yaw, float Pitch) {
     // add yaw and pitch input to controller
     AddControllerYawInput(Yaw);
     AddControllerPitchInput(Pitch);
-  }
-}
-
-void ACombatCharacter::DoComboAttackStart() {
-  // Store current velocity for momentum preservation
-  StoredVelocity = GetVelocity();
-
-  // Cache the input time for combo system
-  SetCachedComboAttackInputTime(GetWorld()->GetTimeSeconds());
-
-  // Send gameplay event to activate combo attack ability
-  SendGameplayEvent(
-      FGameplayTag::RequestGameplayTag(FName("Event.Attack.Combo.Start")));
-
-  // Add camera shake for feedback
-  if (AttackCameraShake) {
-    if (APlayerController *PC = Cast<APlayerController>(GetController())) {
-      if (PC->PlayerCameraManager) {
-        PC->PlayerCameraManager->StartCameraShake(AttackCameraShake);
-      }
-    }
-  }
-}
-
-void ACombatCharacter::DoComboAttackEnd() {
-  // stub
-}
-
-void ACombatCharacter::DoChargedAttackStart() {
-  // Store current velocity for momentum preservation
-  StoredVelocity = GetVelocity();
-
-  // Send gameplay event to activate charged attack ability
-  SendGameplayEvent(
-      FGameplayTag::RequestGameplayTag(FName("Event.Attack.Charged.Start")));
-
-  // Add camera shake for feedback
-  if (AttackCameraShake) {
-    if (APlayerController *PC = Cast<APlayerController>(GetController())) {
-      if (PC->PlayerCameraManager) {
-        PC->PlayerCameraManager->StartCameraShake(AttackCameraShake);
-      }
-    }
-  }
-}
-
-void ACombatCharacter::DoChargedAttackEnd() {
-  // Send release event
-  UAbilitySystemComponent *ASC = GetAbilitySystemComponent();
-  if (ASC) {
-    FGameplayEventData EventData;
-    EventData.Instigator = this;
-    EventData.Target = this;
-
-    ASC->HandleGameplayEvent(
-        FGameplayTag::RequestGameplayTag(FName("Event.Attack.Charged.Release")),
-        &EventData);
   }
 }
 
@@ -336,39 +282,73 @@ void ACombatCharacter::SetupPlayerInputComponent(
   // Set up action bindings
   if (UEnhancedInputComponent *EnhancedInputComponent =
           Cast<UEnhancedInputComponent>(PlayerInputComponent)) {
-    // Moving
+    // Bind inputs from InputConfig if available
+    if (PawnData && PawnData->InputConfig) {
+      BindInputsFromConfig(EnhancedInputComponent);
+    } else {
+      // Fallback to basic movement inputs only
+      BindBasicMovementInputs(EnhancedInputComponent);
+    }
+  }
+}
+
+void ACombatCharacter::BindInputsFromConfig(
+    UEnhancedInputComponent *EnhancedInputComponent) {
+  UAbilitySystemComponent *ASC = GetAbilitySystemComponent();
+  if (!ASC) {
+    // If no ASC, we can't use abilities anyway, so just bind basic movement
+    BindBasicMovementInputs(EnhancedInputComponent);
+    return;
+  }
+
+  // Bind each input mapping
+  for (const FCombatInputMapping &Mapping :
+       PawnData->InputConfig->InputMappings) {
+    if (!Mapping.InputAction)
+      continue;
+
+    // For each trigger in this mapping
+    for (const FCombatAbilityTriggerData &Trigger : Mapping.AbilityTriggers) {
+      if (Trigger.TriggerEvent == ETriggerEvent::Started) {
+        EnhancedInputComponent->BindAction(
+            Mapping.InputAction, Trigger.TriggerEvent, this,
+            &ACombatCharacter::SendAbilityTrigger, Trigger.TriggerTag);
+      } else if (Trigger.TriggerEvent == ETriggerEvent::Completed) {
+        EnhancedInputComponent->BindAction(
+            Mapping.InputAction, Trigger.TriggerEvent, this,
+            &ACombatCharacter::SendAbilityTrigger, Trigger.TriggerTag);
+      }
+      // Add other trigger events as needed
+    }
+  }
+
+  // Also bind movement and look inputs
+  BindBasicMovementInputs(EnhancedInputComponent);
+}
+
+void ACombatCharacter::BindBasicMovementInputs(
+    UEnhancedInputComponent *EnhancedInputComponent) {
+  // Moving
+  if (MoveAction) {
     EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered,
                                        this, &ACombatCharacter::Move);
+  }
 
-    // Looking
+  // Looking
+  if (LookAction) {
     EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered,
                                        this, &ACombatCharacter::Look);
+  }
+  if (MouseLookAction) {
     EnhancedInputComponent->BindAction(MouseLookAction,
                                        ETriggerEvent::Triggered, this,
                                        &ACombatCharacter::Look);
-
-    // Combo Attack
-    EnhancedInputComponent->BindAction(ComboAttackAction,
-                                       ETriggerEvent::Started, this,
-                                       &ACombatCharacter::ComboAttackPressed);
-
-    // Charged Attack
-    EnhancedInputComponent->BindAction(ChargedAttackAction,
-                                       ETriggerEvent::Started, this,
-                                       &ACombatCharacter::ChargedAttackPressed);
-    EnhancedInputComponent->BindAction(
-        ChargedAttackAction, ETriggerEvent::Completed, this,
-        &ACombatCharacter::ChargedAttackReleased);
-
-    // Camera Side Toggle
-    EnhancedInputComponent->BindAction(ToggleCameraAction,
-                                       ETriggerEvent::Triggered, this,
-                                       &ACombatCharacter::ToggleCamera);
-
-    // Lock Target
-    EnhancedInputComponent->BindAction(LockAction, ETriggerEvent::Triggered,
-                                       this, &ACombatCharacter::LockPressed);
   }
+}
+
+void ACombatCharacter::SendAbilityTrigger(FGameplayTag TriggerTag) {
+  // Send gameplay event with the trigger tag
+  SendGameplayEvent(TriggerTag);
 }
 
 void ACombatCharacter::NotifyControllerChanged() {
@@ -422,17 +402,7 @@ void ACombatCharacter::PossessedBy(AController *NewController) {
 
   // Reset attributes to default values on possession (initial spawn or respawn)
   if (ACombatPlayerState *PS = Cast<ACombatPlayerState>(GetPlayerState())) {
-    if (ASC) {
-      ASC->SetNumericAttributeBase(UHealthAttributeSet::GetHealthAttribute(),
-                                   PS->GetDefaultMaxHP());
-      ASC->SetNumericAttributeBase(UHealthAttributeSet::GetMaxHealthAttribute(),
-                                   PS->GetDefaultMaxHP());
-      ASC->SetNumericAttributeBase(UStaminaAttributeSet::GetStaminaAttribute(),
-                                   PS->GetDefaultMaxStamina());
-      ASC->SetNumericAttributeBase(
-          UStaminaAttributeSet::GetMaxStaminaAttribute(),
-          PS->GetDefaultMaxStamina());
-    }
+    PS->ResetAttributesToDefault();
   }
 
   // Initialize movement attributes and bind delegate

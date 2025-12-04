@@ -12,22 +12,17 @@ This document outlines the current compliance status with Epic's Lyra sample gam
 -   **GrantedHandles Pattern**: Proper cleanup of abilities and effects
 -   **AbilitySet Assets**: UCombatAbilitySet for modular ability management
 -   **PawnData System**: Data-driven pawn configuration with ability sets
--   **Input Integration**: Enhanced Input with ability activation via gameplay events
+-   **Input Integration**: Enhanced Input with ability activation via gameplay events and InputConfig system
+-   **Stamina System**: Comprehensive stamina mechanics with regeneration, costs, and stun effects
 
 ### 🚧 Partially Implemented
 
 -   **Modular Gameplay**: Variant system provides modularity but not as extensible as Lyra's Game Features
--   **Input Mapping**: Input actions are mapped but lack centralized InputConfig system
+-   **Input Mapping**: Input actions are mapped with centralized InputConfig system
 
 ### ❌ Not Implemented
 
 #### Core Systems
-
--   **InputConfig**: Centralized input configuration system
-
-    -   Create `UCombatInputConfig` data asset
-    -   Map input actions to ability activation
-    -   Support for multiple input configs per pawn
 
 -   **CameraMode**: Dynamic camera mode system
 
@@ -86,27 +81,6 @@ This document outlines the current compliance status with Epic's Lyra sample gam
 
 6. **Experience System**: For RPG elements
 7. **Game Feature System**: For large-scale modularity
-
-## Migration Guide
-
-### From Legacy Arrays to AbilitySets
-
-The project has migrated from legacy `GrantedAbilities`/`GrantedEffects` arrays to `AbilitySets`. To complete the migration:
-
-1. Create `UCombatAbilitySet` assets for each pawn type
-2. Move abilities and effects from arrays to ability sets
-3. Update `UCombatPawnData` to use `AbilitySets` instead of legacy arrays
-4. Remove legacy array usage from code
-
-### Adding New Lyra Systems
-
-When implementing new systems, follow these patterns:
-
-1. **Data Assets**: Use data assets for configuration (e.g., `UCombatInputConfig`)
-2. **Extension Components**: Use extension components for modular functionality
-3. **Handles and Cleanup**: Always use handle-based management with proper cleanup
-4. **Replication**: Follow Lyra's replication patterns
-5. **Modularity**: Design systems to be easily enabled/disabled
 
 ## Benefits of Full Compliance
 

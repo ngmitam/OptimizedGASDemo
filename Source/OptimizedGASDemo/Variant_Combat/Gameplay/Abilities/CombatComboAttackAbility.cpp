@@ -78,32 +78,27 @@ void UCombatComboAttackAbility::ActivateAbility(
   if (StaminaCosts.Num() > 0) {
     if (ASC) {
       float StaminaCost = StaminaCosts[0];
+
       if (CurrentStamina >= StaminaCost) {
+        // Set stamina used attribute for execution calculation
+        ASC->SetNumericAttributeBase(
+            UStaminaAttributeSet::GetStaminaUsedAttribute(), StaminaCost);
+
         FGameplayEffectSpecHandle SpecHandle = ASC->MakeOutgoingSpec(
             StaminaCostEffectClass, 1.0f, ASC->MakeEffectContext());
         if (SpecHandle.IsValid()) {
-          // Set the stamina cost using SetByCaller
-          SpecHandle.Data.Get()->SetSetByCallerMagnitude(
-              FGameplayTag::RequestGameplayTag(FName("Data.StaminaCost")),
-              -StaminaCost);
           ASC->ApplyGameplayEffectSpecToTarget(*SpecHandle.Data.Get(), ASC);
         }
 
         // Note: Damage will be set based on last hit's stamina cost when combo
         // ends
 
-        // Set stamina used for damage scaling via GE
-        FGameplayEffectSpecHandle UsedSpecHandle = ASC->MakeOutgoingSpec(
-            StaminaUsedEffectClass, 1.0f, ASC->MakeEffectContext());
-        if (UsedSpecHandle.IsValid()) {
-          UsedSpecHandle.Data.Get()->SetSetByCallerMagnitude(
-              FGameplayTag::RequestGameplayTag(FName("Data.StaminaUsed")),
-              StaminaCost);
-          ASC->ApplyGameplayEffectSpecToTarget(*UsedSpecHandle.Data.Get(), ASC);
-        }
+        // Set stamina used for damage scaling
+        ASC->SetNumericAttributeBase(
+            UStaminaAttributeSet::GetStaminaUsedAttribute(), StaminaCost);
       } else {
         // Not enough stamina, for enemies set to 0 to refill, end ability
-        if (!CombatBase->IsPlayerControlled()) {
+        if (!CombatBase->IsPlayerControlled() && CurrentStamina > 0.0f) {
           ASC->SetNumericAttributeBase(
               UStaminaAttributeSet::GetStaminaAttribute(), 0.0f);
         }
@@ -138,6 +133,20 @@ void UCombatComboAttackAbility::ActivateAbility(
           CombatChar->GetStoredVelocity() *
               CombatChar->GetAttackMomentumMultiplier(),
           true);
+    }
+  }
+
+  // Add camera shake for feedback (only for player)
+  if (ACombatCharacter *CombatChar = Cast<ACombatCharacter>(CombatBase)) {
+    if (CombatChar->GetAttackCameraShake() &&
+        CombatBase->IsPlayerControlled()) {
+      if (APlayerController *PC =
+              Cast<APlayerController>(CombatBase->GetController())) {
+        if (PC->PlayerCameraManager) {
+          PC->PlayerCameraManager->StartCameraShake(
+              CombatChar->GetAttackCameraShake());
+        }
+      }
     }
   }
 
@@ -179,6 +188,12 @@ void UCombatComboAttackAbility::ActivateAbility(
         .FindOrAdd(
             FGameplayTag::RequestGameplayTag(FName("Event.Attack.Combo.Next")))
         .AddUObject(this, &UCombatComboAttackAbility::HandleComboNext);
+
+    // Also listen for combo start event to cache input
+    ASC->GenericGameplayEventCallbacks
+        .FindOrAdd(
+            FGameplayTag::RequestGameplayTag(FName("Event.Attack.Combo.Start")))
+        .AddUObject(this, &UCombatComboAttackAbility::HandleComboStart);
   }
 }
 
@@ -212,6 +227,8 @@ void UCombatComboAttackAbility::EndAbility(
     const FGameplayAbilityActorInfo *ActorInfo,
     const FGameplayAbilityActivationInfo ActivationInfo,
     bool bReplicateEndAbility, bool bWasCancelled) {
+  bComboStarted = false;
+
   // Stop montage only if cancelled
   if (bWasCancelled && ComboAttackMontage) {
     if (UAnimInstance *AnimInstance = ActorInfo->GetAnimInstance()) {
@@ -233,6 +250,11 @@ void UCombatComboAttackAbility::EndAbility(
         .FindOrAdd(
             FGameplayTag::RequestGameplayTag(FName("Event.Attack.Combo.Next")))
         .RemoveAll(this);
+
+    ASC->GenericGameplayEventCallbacks
+        .FindOrAdd(
+            FGameplayTag::RequestGameplayTag(FName("Event.Attack.Combo.Start")))
+        .RemoveAll(this);
   }
 
   Super::EndAbility(Handle, ActorInfo, ActivationInfo, bReplicateEndAbility,
@@ -250,18 +272,14 @@ void UCombatComboAttackAbility::HandleComboNext(
   if (CombatBase) {
     if (CombatBase->IsPlayerControlled()) {
       // For player, check if input is not stale
-      ACombatCharacter *CombatChar = Cast<ACombatCharacter>(CombatBase);
-      if (CombatChar) {
-        float CurrentTime = GetWorld()->GetTimeSeconds();
-        if (CurrentTime - CombatChar->GetCachedComboAttackInputTime() >
-            CombatBase->GetComboInputCacheTimeTolerance()) {
-          // Input is stale, end combo
-          bShouldContinueCombo = false;
-        } else {
-          // Consume the cached input
-          CombatChar->SetCachedComboAttackInputTime(0.0f);
-          bShouldContinueCombo = true;
-        }
+      float CurrentTime = GetWorld()->GetTimeSeconds();
+      if (CurrentTime - CachedComboInputTime > ComboInputCacheTimeTolerance) {
+        // Input is stale, end combo
+        bShouldContinueCombo = false;
+      } else {
+        // Consume the cached input
+        CachedComboInputTime = 0.0f;
+        bShouldContinueCombo = true;
       }
     } else {
       // For AI, always continue until target combo count
@@ -298,16 +316,9 @@ void UCombatComboAttackAbility::HandleComboNext(
             // combo ends
 
             // Set stamina used for damage scaling (each hit scales
-            // individually) via GE
-            FGameplayEffectSpecHandle UsedSpecHandle = ASC->MakeOutgoingSpec(
-                StaminaUsedEffectClass, 1.0f, ASC->MakeEffectContext());
-            if (UsedSpecHandle.IsValid()) {
-              UsedSpecHandle.Data.Get()->SetSetByCallerMagnitude(
-                  FGameplayTag::RequestGameplayTag(FName("Data.StaminaUsed")),
-                  StaminaCost);
-              ASC->ApplyGameplayEffectSpecToTarget(*UsedSpecHandle.Data.Get(),
-                                                   ASC);
-            }
+            // individually)
+            ASC->SetNumericAttributeBase(
+                UStaminaAttributeSet::GetStaminaUsedAttribute(), StaminaCost);
 
             // Jump to next section
             if (UAnimInstance *AnimInstance =
@@ -344,4 +355,14 @@ void UCombatComboAttackAbility::HandleComboNext(
     EndAbility(CurrentSpecHandle, GetCurrentActorInfo(),
                GetCurrentActivationInfo(), false, false);
   }
+}
+
+void UCombatComboAttackAbility::HandleComboStart(
+    const FGameplayEventData *EventData) {
+  if (!bComboStarted) {
+    bComboStarted = true;
+    return;
+  }
+  // Cache input time for combo continuation
+  CachedComboInputTime = GetWorld()->GetTimeSeconds();
 }

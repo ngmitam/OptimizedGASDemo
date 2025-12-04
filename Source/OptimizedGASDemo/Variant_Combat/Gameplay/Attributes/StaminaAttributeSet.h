@@ -26,6 +26,12 @@ public:
   virtual void GetLifetimeReplicatedProps(
       TArray<FLifetimeProperty> &OutLifetimeProps) const override;
 
+  virtual void PreAttributeChange(const FGameplayAttribute &Attribute,
+                                  float &NewValue) override;
+
+  virtual void PostAttributeChange(const FGameplayAttribute &Attribute,
+                                   float OldValue, float NewValue) override;
+
   // Stamina
   UPROPERTY(BlueprintReadOnly, Category = "Stamina",
             ReplicatedUsing = OnRep_Stamina)
@@ -52,7 +58,4 @@ protected:
 
   UFUNCTION()
   virtual void OnRep_StaminaUsed(const FGameplayAttributeData &OldStaminaUsed);
-
-  virtual void PreAttributeChange(const FGameplayAttribute &Attribute,
-                                  float &NewValue) override;
 };
