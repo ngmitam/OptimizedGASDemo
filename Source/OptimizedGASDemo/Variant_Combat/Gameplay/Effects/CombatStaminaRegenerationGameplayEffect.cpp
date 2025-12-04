@@ -1,7 +1,7 @@
 // Copyright Nguyen Minh Tam. All Rights Reserved.
 
 #include "CombatStaminaRegenerationGameplayEffect.h"
-#include "Attributes/StaminaAttributeSet.h"
+#include "Executions/CombatStaminaRegenerationExecution.h"
 
 UCombatStaminaRegenerationGameplayEffect::
     UCombatStaminaRegenerationGameplayEffect() {
@@ -11,18 +11,11 @@ UCombatStaminaRegenerationGameplayEffect::
 
   // Set periodic execution every 0.1 seconds
   Period = 0.1f;
-  bExecutePeriodicEffectOnApplication =
-      false; // Don't execute on application to avoid magnitude issues
+  bExecutePeriodicEffectOnApplication = true; // Execute periodically
 
-  // Modifiers: Increase stamina by rate * period per period
-  FGameplayModifierInfo StaminaRegenModifier;
-  StaminaRegenModifier.Attribute = UStaminaAttributeSet::GetStaminaAttribute();
-  StaminaRegenModifier.ModifierOp = EGameplayModOp::Additive;
-  // Use SetByCaller for dynamic amount per period
-  FSetByCallerFloat SetByCallerFloat;
-  SetByCallerFloat.DataTag =
-      FGameplayTag::RequestGameplayTag(FName("Data.StaminaRegenRate"));
-  FGameplayEffectModifierMagnitude SetByCallerMagnitude(SetByCallerFloat);
-  StaminaRegenModifier.ModifierMagnitude = SetByCallerMagnitude;
-  Modifiers.Add(StaminaRegenModifier);
+  // Add execution calculation
+  FGameplayEffectExecutionDefinition ExecutionDef;
+  ExecutionDef.CalculationClass =
+      UCombatStaminaRegenerationExecution::StaticClass();
+  Executions.Add(ExecutionDef);
 }

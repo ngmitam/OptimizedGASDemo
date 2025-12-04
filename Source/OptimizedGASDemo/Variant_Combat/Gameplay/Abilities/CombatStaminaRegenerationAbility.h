@@ -93,7 +93,4 @@ protected:
 
   /** Delegate for stamina changes */
   FOnGameplayAttributeValueChange::FDelegate OnStaminaChangedDelegate;
-
-  /** Timer handle for attack state check */
-  FTimerHandle CheckTimer;
 };
