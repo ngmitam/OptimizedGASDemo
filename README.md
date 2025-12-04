@@ -1,6 +1,6 @@
 # OptimizedGASDemo
 
-[![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.7-blue.svg)](https://www.unrealengine.com/)
+[![Version](https://img.shields.io/badge/version-0.2.0-blue.svg)]() [![Unreal Engine](https://img.shields.io/badge/Unreal%20Engine-5.7-blue.svg)](https://www.unrealengine.com/)
 
 An optimized Unreal Engine 5.7 project demonstrating a performant implementation of the Gameplay Ability System (GAS), inspired by Lyra. This C++-based framework provides extensible abilities, attributes, and combat mechanics.
 
@@ -8,6 +8,7 @@ An optimized Unreal Engine 5.7 project demonstrating a performant implementation
 
 -   [Overview](#overview)
 -   [Features](#features)
+-   [Changelog](CHANGELOG.md)
 -   [Quick Start](#quick-start)
 -   [Usage](#usage)
 -   [Project Structure](#project-structure)
